@@ -3,441 +3,752 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SkyCards – Blinky</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkyCards</title>
+
 <style>
 :root {
-  --blue:#42b5ff;
-  --darkblue:#087fda;
-  --pale:#eaf7ff;
-  --ink:#173b59;
-  --muted:#6b8ba5;
+  --blue: #48a9ff;
+  --light: #eaf6ff;
+  --dark: #12345a;
+  --gold: #ffd76a;
 }
-* { box-sizing:border-box; }
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  margin:0;
-  font-family:Inter,system-ui,Arial,sans-serif;
-  color:var(--ink);
+  margin: 0;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+  color: var(--dark);
   background:
-    radial-gradient(ellipse at 15% 0%,#bde8ff,transparent 38%),
-    radial-gradient(ellipse at 95% 30%,#d9f4ff,transparent 34%),
-    linear-gradient(145deg,#effaff,#d9f0ff 60%,#f8fcff);
-  min-height:100vh;
+    radial-gradient(circle at top left, #ffffff, transparent 40%),
+    linear-gradient(135deg, #dff3ff, #a8d9ff);
 }
-button { font:inherit; cursor:pointer; }
+
 header {
-  position:sticky;top:0;z-index:5;
-  display:flex;align-items:center;justify-content:space-between;
-  gap:12px;flex-wrap:wrap;padding:14px 22px;
-  background:#ffffffdf;backdrop-filter:blur(16px);
-  border-bottom:1px solid #c8eaff;
+  text-align: center;
+  padding: 25px 12px;
+  background: rgba(255,255,255,.65);
+  border-bottom: 2px solid white;
 }
-.logo {font-size:23px;font-weight:950;letter-spacing:-1px}
-.logo span {color:var(--darkblue)}
+
+h1 {
+  margin: 0;
+  font-size: clamp(34px, 7vw, 58px);
+  letter-spacing: 3px;
+  color: #1685e8;
+  text-shadow: 0 4px 0 white;
+}
+
+.subtitle {
+  margin-top: 8px;
+  color: #49759a;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+}
+
 .gold {
-  background:white;border:1px solid #b8e5ff;
-  padding:10px 15px;border-radius:30px;font-weight:850;
+  background: white;
+  border: 2px solid #ffe18a;
+  border-radius: 20px;
+  padding: 10px 18px;
+  font-weight: bold;
+  box-shadow: 0 4px 12px #75b6e855;
 }
-nav {display:flex;gap:6px;flex-wrap:wrap}
-.nav-btn {
-  border:0;background:transparent;color:#577b97;
-  padding:10px 13px;border-radius:13px;font-weight:750;
+
+nav {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
 }
-.nav-btn.active,.nav-btn:hover {background:#d9f1ff;color:var(--darkblue)}
-main {max-width:1100px;margin:auto;padding:28px 17px 55px}
-.page {display:none;animation:fade .35s ease}
-.page.active {display:block}
-.hero {
-  position:relative;overflow:hidden;border-radius:28px;
-  padding:clamp(24px,5vw,48px);
-  background:linear-gradient(125deg,#ffffffed,#cceeffd9);
-  border:1px solid white;box-shadow:0 20px 60px #4b9bd51b;
+
+button {
+  font: inherit;
+  font-weight: bold;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  color: white;
+  background: linear-gradient(135deg, #54b5ff, #237ee8);
+  box-shadow: 0 5px 0 #1764bd;
+  cursor: pointer;
+  transition: transform .15s, filter .15s;
 }
-.eyebrow {
-  display:inline-block;padding:7px 11px;border-radius:20px;
-  background:#d9f3ff;color:#087de0;font-size:12px;
-  font-weight:900;letter-spacing:1.2px;
+
+button:hover {
+  filter: brightness(1.07);
+  transform: translateY(-2px);
 }
-h1 {font-size:clamp(36px,6vw,62px);line-height:1.03;letter-spacing:-2px;margin:17px 0 12px}
-p {line-height:1.65}
-.hero p {color:var(--muted);max-width:550px}
-.primary,.secondary {
-  border:0;border-radius:14px;padding:13px 18px;font-weight:850;
-  transition:transform .2s,filter .2s;
+
+button:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #1764bd;
 }
-.primary {background:linear-gradient(110deg,#43b6ff,#1689e9);color:white;box-shadow:0 8px 18px #1689e933}
-.secondary {background:#e5f5ff;color:#1689e9}
-.primary:hover,.secondary:hover {transform:translateY(-2px);filter:brightness(1.04)}
-.full {width:100%}
-.stats {display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
-.stat {background:#ffffffb8;border:1px solid white;border-radius:18px;padding:16px}
-.stat strong {display:block;font-size:24px}
-.stat small {color:var(--muted)}
-.section-title {margin:30px 0 16px;display:flex;justify-content:space-between;align-items:center;gap:10px}
-.section-title h2 {margin:0;font-size:23px}
-.section-title small {color:var(--muted)}
-.packs {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:17px}
+
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+main {
+  width: min(1150px, 95%);
+  margin: 10px auto 50px;
+}
+
+.panel {
+  background: rgba(255,255,255,.78);
+  border: 2px solid white;
+  border-radius: 25px;
+  padding: 22px;
+  margin: 18px 0;
+  box-shadow: 0 12px 30px #4d94c522;
+}
+
+h2 {
+  margin-top: 0;
+  color: #247fc8;
+}
+
+.pack-grid,
+.collection-grid,
+.reveal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 18px;
+}
+
 .pack {
-  text-align:center;background:#ffffffdf;border:1px solid white;
-  border-radius:24px;padding:19px;box-shadow:0 12px 30px #3989bb12;
-  transition:transform .25s,box-shadow .25s;
+  text-align: center;
+  background: linear-gradient(145deg, #ffffff, #d6edff);
+  border: 2px solid #b8e1ff;
+  border-radius: 22px;
+  padding: 22px 14px;
+  box-shadow: 0 7px 18px #5599c522;
 }
-.pack:hover {transform:translateY(-6px);box-shadow:0 20px 35px #3989bb25}
+
 .pack-art {
-  height:165px;display:grid;place-items:center;position:relative;
-  border-radius:18px;margin-bottom:15px;overflow:hidden;
+  width: 100%;
+  max-width: 145px;
+  height: 155px;
+  margin: 0 auto 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #8bd5ff, #347fe8);
+  color: white;
+  font-size: 58px;
+  box-shadow: inset 0 0 20px #ffffff66;
 }
-.pack-art:before,.pack-art:after {
-  content:"";position:absolute;border-radius:50%;border:1px solid #ffffffa8;
-  width:120px;height:120px;animation:orbit 9s linear infinite;
+
+.pack p {
+  color: #587a98;
+  min-height: 38px;
 }
-.pack-art:after {width:85px;height:85px;animation-direction:reverse}
-.pack-art span {font-size:65px;animation:float 3s ease-in-out infinite;z-index:1}
-.common .pack-art {background:linear-gradient(145deg,#e1f7ff,#8ed8ff)}
-.standard .pack-art {background:linear-gradient(145deg,#e5e5ff,#a4b9ff)}
-.mythic .pack-art {background:linear-gradient(145deg,#d4f7ff,#8bb8ff,#d9c8ff)}
-.pack h3 {margin:5px 0}
-.pack p {font-size:13px;color:var(--muted);min-height:42px}
-.price {font-weight:900;margin:12px 0}
-.notice {padding:13px 15px;border-radius:14px;background:#e0f5ff;color:#27749e;margin:15px 0}
-.collection-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:15px}
-.card-item {
-  background:white;border:1px solid #d5efff;border-radius:20px;overflow:hidden;
-  box-shadow:0 8px 25px #438cba12;animation:rise .4s both;
+
+.price {
+  font-weight: bold;
+  color: #b78200;
+  margin: 12px;
 }
-.card-picture {
-  aspect-ratio:3/4;display:grid;place-items:center;overflow:hidden;
-  background:linear-gradient(145deg,#e6f7ff,#c5eaff);
+
+.card {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  border-radius: 22px;
+  padding: 12px;
+  background: linear-gradient(160deg, #ffffff, #e1f2ff);
+  border: 3px solid #b4dfff;
+  box-shadow: 0 8px 20px #347cb522;
+  animation: appear .35s ease both;
 }
-.card-picture img {width:100%;height:100%;object-fit:contain}
-.placeholder {font-size:48px;color:#91cce9}
-.card-info {padding:12px}
-.card-info h3 {margin:0 0 7px;font-size:16px}
-.tag {font-size:11px;font-weight:850;padding:5px 8px;border-radius:9px;display:inline-block;background:#e2f5ff;color:#1689e9;margin:2px 2px 2px 0}
-.card-info small {display:block;margin-top:8px;color:var(--muted);overflow-wrap:anywhere}
-.empty {text-align:center;padding:40px 15px;border:2px dashed #b9e5ff;border-radius:22px;color:var(--muted);background:#ffffff6b}
-.empty-icon {font-size:48px;margin-bottom:12px}
-.open-area {text-align:center}
-.opening-sub {color:var(--muted)}
-.reveal-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:15px;margin:25px 0}
-.reveal-card {border:0;background:transparent;padding:0;perspective:900px;min-width:0;animation:rise .5s both}
-.flip-inner {display:block;position:relative;aspect-ratio:3/4;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.2,.8,.2,1)}
-.reveal-card.flipped .flip-inner {transform:rotateY(180deg)}
-.face {
-  position:absolute;inset:0;border-radius:19px;overflow:hidden;
-  backface-visibility:hidden;-webkit-backface-visibility:hidden;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  border:1px solid white;box-shadow:0 10px 25px #317ab42b;
+
+.card.legendary {
+  border-color: #ffcc48;
+  background: linear-gradient(150deg, #fffbe6, #ffe39b, #fff8db);
+  box-shadow: 0 0 18px #ffc93366;
 }
-.back {background:linear-gradient(145deg,#a6e5ff,#318fe9);color:white}
-.back .symbol {font-size:54px}
-.back small {font-weight:900;letter-spacing:2px;margin-top:12px}
-.front {background:white;transform:rotateY(180deg)}
-.front img {width:100%;height:78%;object-fit:contain;background:linear-gradient(145deg,#e5f7ff,#d0edff)}
-.reveal-info {padding:8px;width:100%;text-align:center}
-.reveal-info strong {display:block;overflow-wrap:anywhere}
-.reveal-info small {color:var(--muted)}
-.reveal-card.best .front {box-shadow:inset 0 0 0 3px #ffe58d,0 0 28px #ffc83d99}
-.reveal-card.best .back {background:linear-gradient(145deg,#ffe9a0,#79cfff,#9c9aff)}
-.reveal-card.best.flipped {animation:bestPop .9s both}
-.reveal-card.best .front:after {
-  content:"★ BESTE KARTE ★";color:#8b6600;background:#ffefad;
-  position:absolute;top:8px;left:8px;right:8px;border-radius:9px;
-  padding:6px;font-size:10px;font-weight:950;
+
+.card-image {
+  width: 100%;
+  height: 190px;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #d8efff;
 }
-.hidden {display:none!important}
-input[type=file] {display:block;margin:15px 0}
-footer {text-align:center;color:#83a4ba;font-size:12px;padding:20px}
-@keyframes float {0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-10px) rotate(4deg)}}
-@keyframes orbit {to{transform:rotate(360deg)}}
-@keyframes fade {from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes rise {from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes bestPop {0%{transform:scale(.75);filter:brightness(1.5)}55%{transform:scale(1.12);filter:brightness(1.2)}100%{transform:scale(1);filter:brightness(1)}}
-@media(max-width:560px) {
-  header {padding:12px}
-  .logo {font-size:20px}
-  nav {width:100%}
-  .nav-btn {flex:1;padding:9px 5px;font-size:13px}
-  main {padding:20px 12px 40px}
-  .stats {gap:7px}
-  .stat {padding:12px 8px}
-  .stat strong {font-size:20px}
-  .reveal-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
+
+.card h3 {
+  margin: 12px 0 5px;
 }
-@media(prefers-reduced-motion:reduce) {
-  *,*::before,*::after {animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+
+.rarity {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: #e3f3ff;
+  color: #246da7;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.legendary .rarity {
+  background: #ffe69a;
+  color: #805600;
+}
+
+.card-meta {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #56748d;
+}
+
+.empty {
+  grid-column: 1 / -1;
+  padding: 30px;
+  text-align: center;
+  color: #6887a2;
+}
+
+#status {
+  text-align: center;
+  min-height: 24px;
+  font-weight: bold;
+  color: #247fc8;
+  margin: 12px 0;
+}
+
+#reveal {
+  display: none;
+}
+
+.reveal-card {
+  animation: reveal .6s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.small-button {
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+footer {
+  text-align: center;
+  padding: 25px;
+  color: #50799b;
+}
+
+@keyframes appear {
+  from { opacity: 0; transform: translateY(12px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes reveal {
+  0% { opacity: 0; transform: rotateY(90deg) scale(.7); }
+  100% { opacity: 1; transform: rotateY(0) scale(1); }
 }
 </style>
 </head>
+
 <body>
 <header>
-  <div class="logo">☁ SKY<span>CARDS</span></div>
-  <nav>
-    <button class="nav-btn active" data-page="home">Start</button>
-    <button class="nav-btn" data-page="collection">Sammlung</button>
-    <button class="nav-btn" data-page="backup">Speichern</button>
-  </nav>
-  <div class="gold">🪙 <span id="gold">500</span> Gold</div>
+  <h1>☁️ SkyCards</h1>
+  <div class="subtitle">Sammle seltene Karten aus den Wolken!</div>
 </header>
 
+<div class="topbar">
+  <div class="gold">🪙 Gold: <span id="gold">500</span></div>
+  <div class="gold">🃏 Karten: <span id="cardCount">0</span></div>
+  <div class="gold">✨ Entdeckt: <span id="uniqueCount">0</span></div>
+</div>
+
+<nav>
+  <button onclick="showSection('shop')">🛍️ Shop</button>
+  <button onclick="showSection('collection')">📚 Sammlung</button>
+  <button onclick="showSection('save')">💾 Speichern</button>
+</nav>
+
 <main>
-<section id="home" class="page active">
-  <div class="hero">
-    <span class="eyebrow">DEINE SAMMLUNG BEGINNT</span>
-    <h1>Öffne Packs.<br><span style="color:#1689e9">Entdecke Karten.</span></h1>
-    <p>Sammle deine Geister, entdecke seltene Varianten und baue deine eigene Sammlung auf. Welche Karte steckt im nächsten Pack?</p>
-    <button class="primary" onclick="document.getElementById('packs').scrollIntoView({behavior:'smooth'})">Packs entdecken ↓</button>
-  </div>
+  <section id="shop" class="panel">
+    <h2>🛍️ Karten-Shop</h2>
+    <p>Jede Karte kann nur einmal gesammelt werden. Die Spawnchance bestimmt, wie wahrscheinlich eine Karte bei einer Ziehung ist.</p>
 
-  <div class="stats">
-    <div class="stat"><strong id="statCards">0</strong><small>Karten gesammelt</small></div>
-    <div class="stat"><strong id="statUnique">0</strong><small>Verschiedene Karten</small></div>
-    <div class="stat"><strong id="statValue">0</strong><small>Gesamtwert</small></div>
-  </div>
+    <div class="pack-grid">
+      <div class="pack">
+        <div class="pack-art">☁️</div>
+        <h3>Himmels-Pack</h3>
+        <p>Bis zu 3 verschiedene Karten</p>
+        <div class="price">🪙 50 Gold</div>
+        <button onclick="openPack('sky')">Pack öffnen</button>
+      </div>
 
-  <div id="packs" class="section-title"><h2>✨ Booster-Shop</h2><small>Was ziehst du?</small></div>
-  <div class="packs">
-    <article class="pack common">
-      <div class="pack-art"><span>📦</span></div>
-      <h3>Himmels-Pack</h3>
-      <p>Dein erster Schritt in die Kartenwelt.</p>
-      <div class="price">🪙 50 Gold</div>
-      <button class="primary full" onclick="openPack('common')">Pack öffnen</button>
-    </article>
-    <article class="pack standard">
-      <div class="pack-art"><span>💎</span></div>
-      <h3>Kristall-Pack</h3>
-      <p>Ein größeres Abenteuer wartet auf dich.</p>
-      <div class="price">🪙 100 Gold</div>
-      <button class="primary full" onclick="openPack('standard')">Pack öffnen</button>
-    </article>
-    <article class="pack mythic">
-      <div class="pack-art"><span>🌌</span></div>
-      <h3>Kosmos-Pack</h3>
-      <p>Das teuerste Pack für große Sammler.</p>
-      <div class="price">🪙 1.000.000 Gold</div>
-      <button class="primary full" onclick="openPack('mythic')">Pack öffnen</button>
-    </article>
-  </div>
-  <div class="notice">👻 Dein erster Geist ist Blinky! Weitere eigene Geister kannst du später im Code hinzufügen.</div>
-</section>
+      <div class="pack">
+        <div class="pack-art">💎</div>
+        <h3>Kristall-Pack</h3>
+        <p>Bis zu 5 verschiedene Karten</p>
+        <div class="price">🪙 100 Gold</div>
+        <button onclick="openPack('crystal')">Pack öffnen</button>
+      </div>
 
-<section id="collection" class="page">
-  <div class="section-title"><h2>🗂️ Deine Sammlung</h2><small id="collectionCount">0 Karten</small></div>
-  <div id="collectionGrid" class="collection-grid"></div>
-</section>
+      <div class="pack">
+        <div class="pack-art">🌌</div>
+        <h3>Kosmos-Pack</h3>
+        <p>Bis zu 7 verschiedene Karten</p>
+        <div class="price">🪙 1.000.000 Gold</div>
+        <button onclick="openPack('cosmos')">Pack öffnen</button>
+      </div>
+    </div>
 
-<section id="opening" class="page">
-  <div class="open-area">
-    <span class="eyebrow">PACK GEÖFFNET</span>
-    <h2 id="openingTitle">Deine Karten</h2>
-    <p class="opening-sub" id="openingSub">Tippe auf „Nächste Karte aufdecken“.</p>
+    <div id="status" role="status"></div>
+  </section>
+
+  <section id="reveal" class="panel">
+    <h2>✨ Deine neuen Karten!</h2>
     <div id="revealGrid" class="reveal-grid"></div>
-    <button id="revealNext" class="primary" onclick="revealNext()">Nächste Karte aufdecken</button>
-    <button id="finishReveal" class="secondary hidden" onclick="showPage('collection')">Zur Sammlung</button>
-  </div>
-</section>
+    <button onclick="closeReveal()">Weiter</button>
+  </section>
 
-<section id="backup" class="page">
-  <div class="section-title"><h2>💾 Spielstand</h2></div>
-  <div class="hero">
-    <h2>Deine Sammlung sichern</h2>
-    <p>Der Spielstand wird automatisch in diesem Browser gespeichert. Du kannst zusätzlich eine Sicherungsdatei exportieren und später wieder importieren.</p>
-    <button class="primary" onclick="exportSave()">Sicherung exportieren</button>
-    <p style="margin-top:25px">Vorhandene Sicherung wiederherstellen:</p>
+  <section id="collection" class="panel" hidden>
+    <h2>📚 Deine Sammlung</h2>
+    <p>Jede Karte wird nur einmal angezeigt. Noch nicht gesammelte Karten sind hier nicht zu sehen.</p>
+    <div id="collectionGrid" class="collection-grid"></div>
+  </section>
+
+  <section id="save" class="panel" hidden>
+    <h2>💾 Speichern und Wiederherstellen</h2>
+    <p>Dein Spielstand wird automatisch in diesem Browser gespeichert. Du kannst zusätzlich eine Sicherung exportieren.</p>
+    <button onclick="exportSave()">Sicherung exportieren</button>
+    <p style="margin-top:20px">Sicherung importieren:</p>
     <input id="importFile" type="file" accept=".json,application/json">
-    <button class="secondary" onclick="importSave()">Sicherung importieren</button>
-    <div id="backupMessage" class="notice hidden"></div>
-  </div>
-</section>
+    <button onclick="importSave()">Sicherung importieren</button>
+    <p id="saveStatus"></p>
+    <hr style="border:0;border-top:1px solid #cce7fa;margin:24px 0">
+    <button onclick="resetGame()" style="background:linear-gradient(135deg,#ff8d8d,#d94242);box-shadow:0 5px 0 #a52b2b">Spielstand zurücksetzen</button>
+  </section>
 </main>
-<footer>SKYCARDS · Deine Kartenwelt, deine Sammlung 🩵</footer>
+
+<footer>SkyCards · Sammle sie alle! ☁️</footer>
 
 <script>
-// Deine Karten und ihre Varianten stehen hier.
-// Lege 1.png in denselben Ordner wie index.html.
+"use strict";
+
+/* --------------------------------------------------
+   KARTEN
+   spawnChance ist das relative Ziehungsgewicht.
+   Blinky hat ein Gewicht von 2,4.
+   -------------------------------------------------- */
+
 const sprites = [
   {
     id: "SPR-001-NORMAL",
     baseId: "SPR-001",
     name: "Blinky",
     image: "1.png",
+    rarity: "Legendär",
+    variant: "Normal",
+    value: 1500,
+    spawnChance: 2.4
+  }
+
+  /*
+  Weitere Karten fügst du hier hinzu.
+  Beispiel:
+
+  ,{
+    id: "SPR-002-NORMAL",
+    baseId: "SPR-002",
+    name: "DEIN KARTENNAME",
+    image: "2.png",
     rarity: "Gewöhnlich",
     variant: "Normal",
-    value: 10
+    value: 10,
+    spawnChance: 97.6
   }
+  */
 ];
 
-const PACKS = {
-  common: { price:50, count:3, name:"Himmels-Pack" },
-  standard: { price:100, count:5, name:"Kristall-Pack" },
-  mythic: { price:1000000, count:7, name:"Kosmos-Pack" }
-};
 const SAVE_KEY = "skyCardsSaveV1";
+
+const packTypes = {
+  sky: {
+    name: "Himmels-Pack",
+    price: 50,
+    count: 3
+  },
+  crystal: {
+    name: "Kristall-Pack",
+    price: 100,
+    count: 5
+  },
+  cosmos: {
+    name: "Kosmos-Pack",
+    price: 1000000,
+    count: 7
+  }
+};
+
 let save = loadSave();
-let currentPulls = [];
-let revealIndex = 0;
+
+function createInitialSave() {
+  return {
+    gold: 500,
+    owned: [],
+    nextInstanceId: 1
+  };
+}
 
 function loadSave() {
   try {
-    const data = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if(data && Number.isFinite(data.gold) && Array.isArray(data.owned)) return data;
-  } catch(e) {}
-  return {gold:500,owned:[],serial:1};
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return createInitialSave();
+
+    const parsed = JSON.parse(raw);
+
+    return {
+      gold: Number.isFinite(parsed.gold) ? parsed.gold : 500,
+      owned: Array.isArray(parsed.owned) ? parsed.owned : [],
+      nextInstanceId: Number.isInteger(parsed.nextInstanceId)
+        ? parsed.nextInstanceId
+        : 1
+    };
+  } catch {
+    return createInitialSave();
+  }
 }
-function persist() {
-  try {localStorage.setItem(SAVE_KEY,JSON.stringify(save));}
-  catch(e) {alert("Speichern fehlgeschlagen. Exportiere eine Sicherung und prüfe deinen Browser-Speicher.");}
+
+function saveGame() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+  } catch {
+    setStatus("Speichern fehlgeschlagen. Vielleicht ist der Browser-Speicher voll.");
+  }
+
+  updateStats();
 }
-function fmt(n) {return new Intl.NumberFormat("de-DE").format(n);}
-function showPage(id) {
-  document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active",p.id===id));
-  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.page===id));
-  if(id==="collection") renderCollection();
-  window.scrollTo({top:0,behavior:"smooth"});
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
 }
-document.querySelectorAll(".nav-btn").forEach(b=>b.addEventListener("click",()=>showPage(b.dataset.page)));
+
+function setStatus(message) {
+  document.getElementById("status").textContent = message;
+}
 
 function updateStats() {
-  document.getElementById("gold").textContent=fmt(save.gold);
-  document.getElementById("statCards").textContent=save.owned.length;
-  document.getElementById("statUnique").textContent=new Set(save.owned.map(c=>c.cardId)).size;
-  document.getElementById("statValue").textContent=fmt(save.owned.reduce((s,c)=>s+(Number(c.value)||0),0));
-  document.getElementById("collectionCount").textContent=save.owned.length+" Karten";
-}
-function rank(r) {
-  return ({Gewöhnlich:1,Ungewöhnlich:2,Selten:3,Episch:4,Legendär:5,Mythisch:6})[r]||0;
-}
-function openPack(type) {
-  const pack=PACKS[type];
-  if(!pack) return;
-  if(save.gold<pack.price) {alert("Du hast nicht genug Gold für dieses Pack!");return;}
-  if(!sprites.length) {alert("Füge zuerst Karten im sprites-Abschnitt hinzu.");return;}
+  document.getElementById("gold").textContent =
+    save.gold.toLocaleString("de-DE");
 
-  save.gold-=pack.price;
-  currentPulls=[];
-  for(let i=0;i<pack.count;i++) {
-    const c=sprites[Math.floor(Math.random()*sprites.length)];
-    const copy={
-      instanceId:"COPY-"+String(save.serial++).padStart(6,"0"),
-      cardId:c.id,baseId:c.baseId||c.id,name:c.name||"Unbenannte Karte",
-      image:c.image||"",rarity:c.rarity||"Gewöhnlich",
-      variant:c.variant||"Normal",value:Number(c.value)||0
-    };
-    save.owned.push(copy);
-    currentPulls.push(copy);
+  document.getElementById("cardCount").textContent =
+    save.owned.length;
+
+  document.getElementById("uniqueCount").textContent =
+    new Set(save.owned.map(card => card.cardId)).size;
+}
+
+function showSection(sectionId) {
+  document.getElementById("shop").hidden = sectionId !== "shop";
+  document.getElementById("collection").hidden = sectionId !== "collection";
+  document.getElementById("save").hidden = sectionId !== "save";
+
+  if (sectionId === "collection") renderCollection();
+
+  if (sectionId !== "shop") {
+    document.getElementById("reveal").style.display = "none";
   }
-  currentPulls.sort((a,b)=>rank(a.rarity)-rank(b.rarity));
-  persist();
-  updateStats();
-  showPage("opening");
-  document.getElementById("openingTitle").textContent=pack.name+" – "+pack.count+" Karten";
-  document.getElementById("revealGrid").innerHTML="";
-  revealIndex=0;
 
-  currentPulls.forEach((card,i)=>{
-    const button=document.createElement("button");
-    button.className="reveal-card"+(i===currentPulls.length-1?" best":"");
-    button.style.animationDelay=(i*.08)+"s";
-    button.setAttribute("aria-label","Karte "+(i+1)+" aufdecken");
-    button.innerHTML=`
-      <span class="flip-inner">
-        <span class="face back"><span class="symbol">✦</span><small>SKYCARDS</small></span>
-        <span class="face front">
-          ${card.image
-            ? `<img src="${escapeAttr(card.image)}" alt="${escapeAttr(card.name)}" onerror="this.style.display='none'">`
-            : '<span class="placeholder">✧</span>'}
-          <span class="reveal-info">
-            <strong>${escapeHTML(card.name)}</strong>
-            <small>${escapeHTML(card.rarity)} · ${escapeHTML(card.variant)}</small>
-          </span>
-        </span>
-      </span>`;
-    button.addEventListener("click",()=>revealCard(i));
-    document.getElementById("revealGrid").appendChild(button);
-  });
-  updateRevealControls();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
-function revealCard(index) {
-  const cards=[...document.querySelectorAll(".reveal-card")];
-  if(index!==revealIndex||!cards[index]) return;
-  cards[index].classList.add("flipped");
-  revealIndex++;
-  updateRevealControls();
+
+function closeReveal() {
+  document.getElementById("reveal").style.display = "none";
+  document.getElementById("shop").hidden = false;
 }
-function revealNext() {revealCard(revealIndex);}
-function updateRevealControls() {
-  const done=revealIndex>=currentPulls.length;
-  document.getElementById("revealNext").classList.toggle("hidden",done);
-  document.getElementById("finishReveal").classList.toggle("hidden",!done);
-  document.getElementById("openingSub").textContent=done
-    ?"Alle Karten aufgedeckt!"
-    :revealIndex===currentPulls.length-1
-      ?"✨ Jetzt kommt die letzte Karte!"
-      :"Karte "+(revealIndex+1)+" von "+currentPulls.length;
+
+function ownedCardIds() {
+  return new Set(save.owned.map(card => card.cardId));
 }
-function renderCollection() {
-  const grid=document.getElementById("collectionGrid");
-  grid.innerHTML="";
-  if(!save.owned.length) {
-    grid.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🗂️</div><strong>Deine Sammlung ist noch leer</strong><p>Öffne ein Pack, um deine ersten Karten zu sammeln.</p></div>';
+
+/*
+   Gewichtete Zufallsauswahl ohne Zurücklegen:
+   Karten werden innerhalb eines Packs nicht doppelt gezogen.
+   Bereits gesammelte Karten werden ebenfalls ausgeschlossen.
+
+   Wichtig: 2,4 ist ein Gewicht, kein garantierter Anteil von
+   2,4 % an jedem einzelnen Pack. Damit Blinky exakt 2,4 %
+   erhält, müssen die Gewichte aller verfügbaren Karten zusammen
+   100 ergeben.
+*/
+
+function weightedDraw(pool) {
+  const totalWeight = pool.reduce((sum, card) => {
+    const weight = Number(card.spawnChance);
+    return sum + (Number.isFinite(weight) && weight > 0 ? weight : 0);
+  }, 0);
+
+  if (totalWeight <= 0) return null;
+
+  let roll = Math.random() * totalWeight;
+
+  for (const card of pool) {
+    const weight = Number(card.spawnChance);
+
+    if (!Number.isFinite(weight) || weight <= 0) continue;
+
+    roll -= weight;
+
+    if (roll < 0) return card;
+  }
+
+  return pool[pool.length - 1] || null;
+}
+
+function openPack(type) {
+  const pack = packTypes[type];
+
+  if (!pack) return;
+
+  if (save.gold < pack.price) {
+    setStatus("Du hast nicht genug Gold für dieses Pack!");
     return;
   }
-  [...save.owned].reverse().forEach((card,i)=>{
-    const el=document.createElement("article");
-    el.className="card-item";
-    el.style.animationDelay=(Math.min(i,12)*.035)+"s";
-    el.innerHTML=`
-      <div class="card-picture">
-        ${card.image
-          ? `<img src="${escapeAttr(card.image)}" alt="${escapeAttr(card.name)}" onerror="this.style.display='none'">`
-          : '<span class="placeholder">✧</span>'}
-      </div>
-      <div class="card-info">
-        <h3>${escapeHTML(card.name)}</h3>
-        <span class="tag">${escapeHTML(card.rarity)}</span>
-        <span class="tag">${escapeHTML(card.variant)}</span>
-        <small>🪙 Wert: ${fmt(card.value)}</small>
-        <small>Karten-ID: ${escapeHTML(card.cardId)}</small>
-        <small>Exemplar-ID: ${escapeHTML(card.instanceId)}</small>
-      </div>`;
-    grid.appendChild(el);
+
+  const alreadyOwned = ownedCardIds();
+
+  let available = sprites.filter(card =>
+    !alreadyOwned.has(card.id) &&
+    Number(card.spawnChance) > 0
+  );
+
+  if (available.length === 0) {
+    setStatus("Du hast bereits alle verfügbaren Karten gesammelt!");
+    return;
+  }
+
+  /*
+    Bei weniger verfügbaren Karten als Pack-Plätzen werden
+    nur die noch fehlenden Karten gezogen.
+  */
+  const drawCount = Math.min(pack.count, available.length);
+
+  save.gold -= pack.price;
+
+  const pulled = [];
+
+  for (let i = 0; i < drawCount; i++) {
+    const chosen = weightedDraw(available);
+
+    if (!chosen) break;
+
+    pulled.push(chosen);
+    available = available.filter(card => card.id !== chosen.id);
+
+    save.owned.push({
+      instanceId: save.nextInstanceId++,
+      cardId: chosen.id
+    });
+  }
+
+  saveGame();
+  setStatus("");
+
+  document.getElementById("shop").hidden = false;
+  document.getElementById("reveal").style.display = "block";
+
+  renderReveal(pulled);
+
+  document.getElementById("reveal").scrollIntoView({
+    behavior: "smooth",
+    block: "start"
   });
 }
-function escapeHTML(s) {
-  return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function getSprite(cardId) {
+  return sprites.find(card => card.id === cardId);
 }
-function escapeAttr(s) {return escapeHTML(s);}
+
+function makeCardHTML(sprite, extraClass = "") {
+  const legendary = sprite.rarity === "Legendär" ? "legendary" : "";
+
+  return `
+    <article class="card ${legendary} ${extraClass}">
+      <img
+        class="card-image"
+        src="${escapeHTML(sprite.image)}"
+        alt="${escapeHTML(sprite.name)}"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
+      >
+      <div style="display:none;padding:35px 5px;color:#6887a2">
+        Bild nicht gefunden:<br>${escapeHTML(sprite.image)}
+      </div>
+
+      <h3>${escapeHTML(sprite.name)}</h3>
+      <span class="rarity">${escapeHTML(sprite.rarity)}</span>
+
+      <div class="card-meta">
+        Variante: ${escapeHTML(sprite.variant)}<br>
+        Wert: 🪙 ${Number(sprite.value).toLocaleString("de-DE")}<br>
+        Spawnchance: ${Number(sprite.spawnChance).toLocaleString("de-DE")}% 
+      </div>
+    </article>
+  `;
+}
+
+function renderReveal(pulled) {
+  const grid = document.getElementById("revealGrid");
+
+  if (!pulled.length) {
+    grid.innerHTML = '<div class="empty">Keine neuen Karten erhalten.</div>';
+    return;
+  }
+
+  /*
+    Die seltenste gezogene Karte wird zuletzt angezeigt.
+  */
+  const sorted = [...pulled].sort((a, b) =>
+    Number(a.spawnChance) - Number(b.spawnChance)
+  );
+
+  grid.innerHTML = sorted.map((card, index) =>
+    makeCardHTML(card, "reveal-card")
+      .replace('class="card ', `style="animation-delay:${index * 0.12}s" class="card `)
+  ).join("");
+}
+
+function renderCollection() {
+  const grid = document.getElementById("collectionGrid");
+  const uniqueIds = [...new Set(save.owned.map(card => card.cardId))];
+
+  const cards = uniqueIds
+    .map(getSprite)
+    .filter(Boolean);
+
+  if (!cards.length) {
+    grid.innerHTML = '<div class="empty">Noch keine Karten gesammelt. Öffne dein erstes Pack!</div>';
+    return;
+  }
+
+  grid.innerHTML = cards.map(card => makeCardHTML(card)).join("");
+}
 
 function exportSave() {
-  const blob=new Blob([JSON.stringify({format:"SkyCardsSaveV1",save},null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;a.download="skycards-sicherung.json";a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-  message("Sicherung exportiert.");
+  const data = JSON.stringify(save, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "SkyCards-Sicherung.json";
+  link.click();
+
+  URL.revokeObjectURL(url);
+
+  document.getElementById("saveStatus").textContent =
+    "Sicherung wurde exportiert.";
 }
+
 function importSave() {
-  const file=document.getElementById("importFile").files[0];
-  if(!file) {message("Bitte wähle zuerst eine Sicherungsdatei aus.");return;}
-  const reader=new FileReader();
-  reader.onload=()=>{
+  const input = document.getElementById("importFile");
+  const file = input.files && input.files[0];
+
+  if (!file) {
+    document.getElementById("saveStatus").textContent =
+      "Wähle zuerst eine JSON-Sicherung aus.";
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
     try {
-      const data=JSON.parse(reader.result);
-      if(data.format!=="SkyCardsSaveV1"||!data.save||!Array.isArray(data.save.owned)||!Number.isFinite(data.save.gold)) throw Error();
-      if(!confirm("Der Import ersetzt deinen aktuellen Spielstand. Fortfahren?")) return;
-      save=data.save;
-      if(!Number.isFinite(save.serial)) save.serial=save.owned.length+1;
-      persist();updateStats();renderCollection();
-      message("Sicherung erfolgreich importiert.");
-    } catch(e) {message("Diese Datei ist keine gültige SkyCards-Sicherung.");}
+      const imported = JSON.parse(reader.result);
+
+      if (
+        !Number.isFinite(imported.gold) ||
+        !Array.isArray(imported.owned)
+      ) {
+        throw new Error("Ungültige Sicherung");
+      }
+
+      const validIds = new Set(sprites.map(card => card.id));
+
+      const uniqueOwned = [];
+      const seen = new Set();
+
+      for (const entry of imported.owned) {
+        if (
+          entry &&
+          validIds.has(entry.cardId) &&
+          !seen.has(entry.cardId)
+        ) {
+          seen.add(entry.cardId);
+          uniqueOwned.push({
+            instanceId: Number.isInteger(entry.instanceId)
+              ? entry.instanceId
+              : uniqueOwned.length + 1,
+            cardId: entry.cardId
+          });
+        }
+      }
+
+      save = {
+        gold: Math.max(0, Math.floor(imported.gold)),
+        owned: uniqueOwned,
+        nextInstanceId: Math.max(
+          Number(imported.nextInstanceId) || 1,
+          uniqueOwned.length + 1
+        )
+      };
+
+      saveGame();
+      renderCollection();
+
+      document.getElementById("saveStatus").textContent =
+        "Sicherung erfolgreich importiert.";
+    } catch {
+      document.getElementById("saveStatus").textContent =
+        "Diese Sicherungsdatei ist ungültig.";
+    }
   };
+
   reader.readAsText(file);
 }
-function message(text) {
-  const el=document.getElementById("backupMessage");
-  el.textContent=text;el.classList.remove("hidden");
+
+function resetGame() {
+  const confirmed = confirm(
+    "Möchtest du deinen Spielstand wirklich zurücksetzen? Exportiere vorher eine Sicherung, wenn du ihn behalten möchtest."
+  );
+
+  if (!confirmed) return;
+
+  save = createInitialSave();
+  saveGame();
+
+  document.getElementById("reveal").style.display = "none";
+  document.getElementById("saveStatus").textContent =
+    "Spielstand zurückgesetzt.";
+
+  renderCollection();
+  setStatus("Neuer Spielstand erstellt.");
 }
+
 updateStats();
 </script>
 </body>

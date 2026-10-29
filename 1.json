@@ -1,0 +1,23 @@
+
+[
+  {
+    "id": "SPR-001-NORMAL",
+    "baseId": "SPR-001",
+    "name": "Blinky",
+    "image": "1.png",
+    "rarity": "Legendär",
+    "variant": "Normal",
+    "value": 1500,
+    "spawnChance": 2.4
+  },
+  {
+    "id": "SPR-002-NORMAL",
+    "baseId": "SPR-002",
+    "name": "Oreling",
+    "image": "2.png",
+    "rarity": "selten",
+    "variant": "Normal",
+    "value": 500,
+    "spawnChance": 25
+  }
+]

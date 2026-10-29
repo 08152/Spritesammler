@@ -1,0 +1,561 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPRITE HUNTERS</title>
+<style>
+:root {
+  --bg:#0b0d16;--panel:#151a29;--line:#303851;
+  --text:#f4f6ff;--muted:#9ca8c3;--gold:#ffd166;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top,#202746,#0b0d16 65%);color:var(--text);font-family:Arial,sans-serif;min-height:100vh}
+header{text-align:center;padding:24px 12px;background:#111629;border-bottom:1px solid var(--line)}
+h1{font-size:clamp(27px,6vw,43px);letter-spacing:4px;margin:0}
+header p{color:var(--muted)}
+.gold{color:var(--gold);font-weight:bold}
+.stats{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+.stat{padding:10px 15px;background:#20263a;border:1px solid var(--line);border-radius:12px}
+nav{display:flex;gap:7px;max-width:850px;margin:auto;padding:12px}
+button{border:1px solid #424c6c;background:#242c43;color:white;font-weight:bold;padding:12px 14px;border-radius:11px;cursor:pointer;touch-action:manipulation}
+button:active{transform:scale(.97)}
+nav button{flex:1;padding:12px 4px}
+button.active,.primary{background:linear-gradient(110deg,#6250c8,#8749c6);border-color:#a38bff}
+main{max-width:1050px;padding:12px;margin:auto}
+.page{display:none}.page.active{display:block}
+h2{font-size:23px}
+.muted{color:var(--muted);line-height:1.5}
+.panel{padding:17px;background:#151a29;border:1px solid var(--line);border-radius:17px;margin-bottom:15px}
+.pack-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.pack-choice{text-align:center;padding:17px 10px;background:linear-gradient(150deg,#202846,#131725);border:1px solid #45466f;border-radius:17px}
+.pack-art{width:125px;height:165px;margin:5px auto 15px;border:2px solid #8875ff;border-radius:15px;background:linear-gradient(145deg,#343c75,#171a30);display:grid;place-items:center;font-size:52px;box-shadow:0 0 22px #6655cc33}
+.pack-choice:nth-child(2) .pack-art{border-color:#e6b65d}
+.pack-choice:nth-child(3) .pack-art{border-color:#ff649d}
+.pack-choice button{width:100%;margin-top:10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
+.card{--rarity:#b5b8c9;background:linear-gradient(155deg,#242b40,#111521);border:2px solid var(--rarity);border-radius:15px;padding:10px;min-width:0;text-align:center;animation:reveal .3s ease-out}
+.card.holo{background:linear-gradient(135deg,#343252,#29263c,#1d2940)}
+@keyframes reveal{from{opacity:0;transform:translateY(10px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+.picture{height:150px;background:#0b0e18;border-radius:9px;margin-bottom:10px;display:grid;place-items:center;overflow:hidden}
+.picture img{width:100%;height:100%;object-fit:contain}
+.rarity{font-size:11px;letter-spacing:.6px;font-weight:bold;color:var(--rarity)}
+.card h3{font-size:16px;margin:8px 0}
+.variant{font-size:12px;color:#d3d8ec}
+.value{font-size:13px;margin:9px 0;color:var(--gold);font-weight:bold;overflow-wrap:anywhere}
+.cardid{font-size:10px;color:#929db7;overflow-wrap:anywhere;margin-top:7px}
+.quantity{font-size:13px;color:#c9d2e8}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.toolbar button{flex:1}
+input,textarea{width:100%;background:#0e1220;color:white;border:1px solid #424c6c;border-radius:10px;padding:12px;margin:6px 0 12px}
+#camera{width:100%;max-width:450px;border-radius:12px;background:#000}
+.empty{padding:25px;text-align:center;color:var(--muted);background:var(--panel);border-radius:13px;line-height:1.6}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);padding:12px 18px;background:#343d5c;border-radius:12px;display:none;z-index:5;max-width:90%;text-align:center}
+footer{text-align:center;padding:25px;color:#7d89a6;font-size:12px}
+@media(max-width:400px){nav{gap:4px;padding:7px}nav button{font-size:12px}main{padding:8px}.picture{height:125px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>SPRITE HUNTERS</h1>
+  <p>Deine Sammlung. Deine Entdeckungen.</p>
+  <div class="stats">
+    <div class="stat">🪙 <span class="gold" id="gold">500</span> Gold</div>
+    <div class="stat">🎴 <span id="total">0</span> Karten</div>
+    <div class="stat">💎 <span id="unique">0</span> Varianten</div>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-page="shop">Packs</button>
+  <button data-page="collection">Sammlung</button>
+  <button data-page="backup">QR-Backup</button>
+</nav>
+
+<main>
+<section id="shop" class="page active">
+  <h2>Pack-Shop</h2>
+  <p class="muted">Öffne Packs. Die beste Karte wird am Ende aufgedeckt.</p>
+  <div class="pack-list">
+    <div class="pack-choice">
+      <div class="pack-art">✦</div>
+      <h3>Gewöhnliches Pack</h3><p class="gold">50 Gold</p><p class="muted">3 Karten</p>
+      <button class="primary" onclick="openPack('common')">Pack öffnen</button>
+    </div>
+    <div class="pack-choice">
+      <div class="pack-art">✧</div>
+      <h3>Standard-Pack</h3><p class="gold">100 Gold</p><p class="muted">5 Karten</p>
+      <button class="primary" onclick="openPack('standard')">Pack öffnen</button>
+    </div>
+    <div class="pack-choice">
+      <div class="pack-art">★</div>
+      <h3>Mythisches Pack</h3><p class="gold">1.000.000 Gold</p><p class="muted">5 Karten</p>
+      <button class="primary" onclick="openPack('mythic')">Pack öffnen</button>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:15px">
+    <h2>Dein letztes Pack</h2>
+    <p class="muted" id="packMessage">Deine Karten erscheinen hier.</p>
+    <div id="results" class="cards"><div class="empty">Noch kein Pack geöffnet.</div></div>
+  </div>
+</section>
+
+<section id="collection" class="page">
+  <h2>Meine Sammlung</h2>
+  <p class="muted">Jedes Exemplar hat seine eigene ID.</p>
+  <div class="toolbar">
+    <button onclick="sortCollection('rarity')">Seltenheit</button>
+    <button onclick="sortCollection('value')">Wert</button>
+    <button onclick="sortCollection('name')">Name</button>
+  </div>
+  <div id="collectionCards" class="cards"></div>
+</section>
+
+<section id="backup" class="page">
+  <h2>Sammlung sichern</h2>
+  <div class="panel">
+    <h3>QR-Code erstellen</h3>
+    <p class="muted">Der Code sichert Gold, Karten-IDs und Exemplare. Die Sicherung ist an deine lokale Browser-Kennung gebunden.</p>
+    <button class="primary" onclick="makeQR()" style="width:100%">QR-Code erstellen</button>
+    <div id="qrOutput" style="text-align:center;margin-top:15px"></div>
+    <button id="downloadQR" style="display:none;width:100%;margin-top:10px" onclick="downloadQR()">QR-Bild speichern</button>
+    <button onclick="exportJSON()" style="width:100%;margin-top:10px">JSON-Backup speichern</button>
+  </div>
+
+  <div class="panel">
+    <h3>QR-Code direkt scannen</h3>
+    <p class="muted">Erlaube den Kamerazugriff, richte die Kamera auf deinen Sicherungs-QR-Code und halte ihn ruhig.</p>
+    <button class="primary" id="startCamera" onclick="startScan()" style="width:100%">Kamera starten</button>
+    <video id="camera" autoplay playsinline style="display:none;margin-top:12px"></video>
+    <button id="stopCamera" onclick="stopScan()" style="display:none;width:100%;margin-top:8px">Kamera stoppen</button>
+    <p id="scanStatus" class="muted"></p>
+    <label for="jsonFile">Oder JSON-Backup wiederherstellen</label>
+    <input id="jsonFile" type="file" accept=".json,application/json">
+    <button onclick="importJSON()" style="width:100%">JSON importieren</button>
+  </div>
+</section>
+</main>
+
+<footer>SPRITE HUNTERS · Lokale Browser-Speicherung</footer>
+<div id="toast"></div>
+
+<script>
+// ========================================================
+// HIER FÜGST NUR DU DEINE SPRITES HINZU.
+//
+// Lege das Bild in denselben Ordner wie index.html.
+//
+// Beispiel:
+//
+// {
+//   id:"SPR-001-NORMAL",
+//   baseId:"SPR-001",
+//   name:"Mein Sprite",
+//   image:"meinbild.png",
+//   rarity:"Gewöhnlich",
+//   variant:"Normal",
+//   value:10
+// }
+//
+// Weitere Variante derselben Figur:
+//
+// {
+//   id:"SPR-001-GOLD",
+//   baseId:"SPR-001",
+//   name:"Mein Sprite",
+//   image:"meinbild.png",
+//   rarity:"Legendär",
+//   variant:"Gold",
+//   value:1500
+// }
+//
+// Jede andere Kartenvariante benötigt eine eigene ID.
+// Ändere bestehende IDs nicht, wenn du alte Backups behalten willst.
+// Erlaubte Seltenheiten:
+// Gewöhnlich, Ungewöhnlich, Selten, Episch, Legendär, Mythisch.
+// ========================================================
+
+const sprites = [
+  // DEINE SPRITES HIER EINFÜGEN
+];
+
+const rarities = {
+  "Gewöhnlich":   {color:"#b5b8c9",weight:55,rank:1},
+  "Ungewöhnlich": {color:"#64d99b",weight:25,rank:2},
+  "Selten":       {color:"#55baff",weight:12,rank:3},
+  "Episch":       {color:"#c18aff",weight:5,rank:4},
+  "Legendär":     {color:"#ffbd59",weight:2.5,rank:5},
+  "Mythisch":     {color:"#ff648b",weight:.5,rank:6}
+};
+
+const packTypes = {
+  common:{price:50,count:3,maxRank:2},
+  standard:{price:100,count:5,maxRank:6},
+  mythic:{price:1000000,count:5,maxRank:6}
+};
+
+const STORAGE_KEY = "spriteHuntersSaveV2";
+const BROWSER_KEY = "spriteHuntersBrowserId";
+const OWNER_KEY = "spriteHuntersOwnerToken";
+
+function randomId(){
+  if(crypto.randomUUID)return crypto.randomUUID();
+  return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);
+}
+
+function getLocalToken(key){
+  let value=localStorage.getItem(key);
+  if(!value){
+    value=randomId();
+    localStorage.setItem(key,value);
+  }
+  return value;
+}
+
+const browserId=getLocalToken(BROWSER_KEY);
+const ownerToken=getLocalToken(OWNER_KEY);
+
+function loadGame(){
+  try{
+    const data=JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if(data && typeof data.gold==="number" && data.owned)
+      return data;
+  }catch(e){}
+  return {gold:500,owned:{},nextSerial:1};
+}
+
+let game=loadGame();
+let lastPack=[];
+let sortMode="rarity";
+let qrDataURL=null;
+let scanStream=null;
+let scanTimer=null;
+let qrLibraryPromise=null;
+
+function saveGame(){
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(game));
+    updateStats();
+  }catch(e){toast("Speicher voll. Bitte erstelle ein Backup.");}
+}
+
+function toast(message){
+  const el=document.getElementById("toast");
+  el.textContent=message;el.style.display="block";
+  clearTimeout(toast.timer);
+  toast.timer=setTimeout(()=>el.style.display="none",3000);
+}
+
+function esc(s){
+  return String(s??"").replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  })[c]);
+}
+
+function getSprite(id){return sprites.find(s=>s.id===id);}
+function rankOf(sprite){return (rarities[sprite?.rarity]||rarities["Gewöhnlich"]).rank;}
+function cardValue(sprite){return Number(sprite.value)||0;}
+
+function updateStats(){
+  document.getElementById("gold").textContent=game.gold.toLocaleString("de-DE");
+  let total=0,unique=0;
+  for(const entry of Object.values(game.owned)){
+    const count=Array.isArray(entry.instances)?entry.instances.length:0;
+    total+=count;if(count)unique++;
+  }
+  document.getElementById("total").textContent=total;
+  document.getElementById("unique").textContent=unique;
+}
+
+function newInstance(sprite){
+  const serial=game.nextSerial++;
+  return {
+    instanceId:"EX-"+serial.toString(36).toUpperCase()+"-"+randomId(),
+    cardId:sprite.id,
+    obtainedAt:new Date().toISOString()
+  };
+}
+
+function weightedPick(items,weight){
+  const total=items.reduce((n,x)=>n+weight(x),0);
+  let r=Math.random()*total;
+  for(const item of items){r-=weight(item);if(r<0)return item;}
+  return items[items.length-1];
+}
+
+function openPack(type){
+  const config=packTypes[type];
+  if(!config)return;
+  if(game.gold<config.price){toast("Du hast nicht genug Gold!");return;}
+  if(!sprites.length){toast("Füge zuerst deine eigenen Sprites im Code hinzu.");return;}
+
+  game.gold-=config.price;
+  lastPack=[];
+
+  for(let i=0;i<config.count;i++){
+    let pool=sprites.filter(s=>rankOf(s)<=config.maxRank);
+    if(!pool.length)pool=sprites;
+
+    const sprite=weightedPick(pool,s=>{
+      const rarity=rarities[s.rarity]||rarities["Gewöhnlich"];
+      return type==="mythic"?rarity.weight*Math.pow(rarity.rank,2):rarity.weight;
+    });
+
+    const instance=newInstance(sprite);
+    if(!game.owned[sprite.id])game.owned[sprite.id]={instances:[]};
+    game.owned[sprite.id].instances.push(instance);
+    lastPack.push({sprite,instance});
+  }
+
+  lastPack.sort((a,b)=>rankOf(a.sprite)-rankOf(b.sprite)||
+    cardValue(a.sprite)-cardValue(b.sprite));
+
+  saveGame();
+  renderLastPack();
+  renderCollection();
+  toast("Pack geöffnet! Die beste Karte kommt zuletzt.");
+}
+
+function cardHTML(sprite,instance,count){
+  const rarity=rarities[sprite.rarity]||rarities["Gewöhnlich"];
+  const variant=sprite.variant||"Normal";
+  const img=esc(sprite.image||"");
+  return `<article class="card ${variant!=="Normal"?"holo":""}" style="--rarity:${rarity.color}">
+    <div class="picture">
+      ${img?`<img src="${img}" alt="${esc(sprite.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`:""}
+      <span style="display:${img?"none":"block"};font-size:13px;color:#7e8ba8">Kein Bild</span>
+    </div>
+    <div class="rarity">${esc(sprite.rarity)}</div>
+    <h3>${esc(sprite.name)}</h3>
+    <div class="variant">${esc(variant)}</div>
+    <div class="value">🪙 ${cardValue(sprite).toLocaleString("de-DE")} Wert</div>
+    <div class="cardid">Karten-ID: ${esc(sprite.id)}</div>
+    ${instance?`<div class="cardid">Exemplar-ID: ${esc(instance.instanceId)}</div>`:""}
+    ${count!==undefined?`<div class="quantity">Besitz: ${count}</div>`:""}
+  </article>`;
+}
+
+function renderLastPack(){
+  const el=document.getElementById("results");
+  document.getElementById("packMessage").textContent=
+    lastPack.length?`${lastPack.length} Karten. Deine beste Karte wird zuletzt angezeigt.`:"Deine Karten erscheinen hier.";
+  if(!lastPack.length){
+    el.innerHTML='<div class="empty">Noch kein Pack geöffnet.</div>';return;
+  }
+  el.innerHTML=lastPack.map((x,i)=>
+    `<div>${cardHTML(x.sprite,x.instance)}${i===lastPack.length-1?
+      '<p style="text-align:center;color:#ffd166;font-weight:bold">★ BESTE KARTE ★</p>':""}</div>`
+  ).join("");
+}
+
+function renderCollection(){
+  const el=document.getElementById("collectionCards");
+  const cards=[];
+  for(const [id,entry] of Object.entries(game.owned)){
+    const sprite=getSprite(id);
+    const instances=Array.isArray(entry.instances)?entry.instances:[];
+    if(sprite){
+      for(const instance of instances)cards.push({sprite,instance});
+    }else if(instances.length){
+      cards.push({unknownId:id,instances});
+    }
+  }
+
+  cards.sort((a,b)=>{
+    if(a.unknownId||b.unknownId)return String(a.unknownId||a.sprite.id).localeCompare(String(b.unknownId||b.sprite.id));
+    if(sortMode==="value")return cardValue(b.sprite)-cardValue(a.sprite);
+    if(sortMode==="name")return a.sprite.name.localeCompare(b.sprite.name);
+    return rankOf(b.sprite)-rankOf(a.sprite)||cardValue(b.sprite)-cardValue(a.sprite);
+  });
+
+  if(!cards.length){
+    el.innerHTML='<div class="empty">Noch keine Karten gesammelt.<br>Öffne dein erstes Pack!</div>';return;
+  }
+
+  el.innerHTML=cards.map(c=>{
+    if(c.unknownId)return `<article class="card">
+      <h3>Unbekannte Karte</h3><p class="muted">Gespeicherte Karte; der Sprite fehlt derzeit im Code.</p>
+      <div class="cardid">Karten-ID: ${esc(c.unknownId)}</div>
+      ${c.instances.map(x=>`<div class="cardid">Exemplar-ID: ${esc(x.instanceId)}</div>`).join("")}
+    </article>`;
+    return cardHTML(c.sprite,c.instance);
+  }).join("");
+}
+
+function sortCollection(mode){sortMode=mode;renderCollection();}
+
+document.querySelectorAll("nav button").forEach(button=>{
+  button.addEventListener("click",()=>{
+    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+    button.classList.add("active");
+    document.getElementById(button.dataset.page).classList.add("active");
+    if(button.dataset.page==="collection")renderCollection();
+  });
+});
+
+// QR-Helfer werden erst bei Verwendung geladen.
+function loadQR(){
+  if(qrLibraryPromise)return qrLibraryPromise;
+  qrLibraryPromise=new Promise((resolve,reject)=>{
+    const a=document.createElement("script");
+    a.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+    a.onload=()=>{
+      const b=document.createElement("script");
+      b.src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js";
+      b.onload=resolve;b.onerror=()=>reject(new Error("Scannerbibliothek nicht verfügbar"));
+      document.head.appendChild(b);
+    };
+    a.onerror=()=>reject(new Error("QR-Bibliothek nicht verfügbar"));
+    document.head.appendChild(a);
+  });
+  return qrLibraryPromise;
+}
+
+function makeBackup(){
+  return {
+    format:"SPRITE-HUNTERS-BACKUP",
+    version:2,
+    browserId,
+    ownerToken,
+    gold:game.gold,
+    nextSerial:game.nextSerial,
+    owned:game.owned
+  };
+}
+
+async function makeQR(){
+  const output=document.getElementById("qrOutput");
+  output.innerHTML='<p class="muted">Erstelle QR-Code …</p>';
+  document.getElementById("downloadQR").style.display="none";
+  try{
+    await loadQR();
+    const data=JSON.stringify(makeBackup());
+    if(data.length>1800){
+      output.innerHTML='<div class="empty">Die Sammlung ist zu groß für einen QR-Code. Bitte exportiere eine JSON-Sicherung.</div>';
+      return;
+    }
+    output.innerHTML='<div id="qrCanvas" style="display:inline-block;background:white;padding:12px;border-radius:10px"></div>';
+    new QRCode(document.getElementById("qrCanvas"),{
+      text:data,width:260,height:260,
+      correctLevel:QRCode.CorrectLevel.L
+    });
+    setTimeout(()=>{
+      const canvas=output.querySelector("canvas");
+      const img=output.querySelector("img");
+      qrDataURL=canvas?canvas.toDataURL("image/png"):img?.src||null;
+      if(qrDataURL)document.getElementById("downloadQR").style.display="block";
+    },300);
+  }catch(e){
+    output.innerHTML='<div class="empty">QR-Bibliothek konnte nicht geladen werden. Exportiere stattdessen JSON.</div>';
+  }
+}
+
+function downloadQR(){
+  if(!qrDataURL)return;
+  const a=document.createElement("a");
+  a.href=qrDataURL;a.download="sprite-hunters-backup.png";a.click();
+}
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(makeBackup(),null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download="sprite-hunters-backup.json";a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function startScan(){
+  if(!navigator.mediaDevices?.getUserMedia){
+    toast("Kamera nicht verfügbar. Nutze die JSON-Sicherung.");
+    return;
+  }
+  try{
+    await loadQR();
+    scanStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:"environment"},audio:false
+    });
+    const video=document.getElementById("camera");
+    video.srcObject=scanStream;
+    video.style.display="block";
+    document.getElementById("stopCamera").style.display="block";
+    document.getElementById("startCamera").style.display="none";
+    document.getElementById("scanStatus").textContent="Richte die Kamera auf deinen QR-Code.";
+    await video.play();
+    scanTimer=setInterval(()=>{
+      if(video.readyState<2||!video.videoWidth)return;
+      const canvas=document.createElement("canvas");
+      canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+      const ctx=canvas.getContext("2d",{willReadFrequently:true});
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      const frame=ctx.getImageData(0,0,canvas.width,canvas.height);
+      const result=jsQR(frame.data,frame.width,frame.height);
+      if(result){
+        stopScan();
+        restoreBackup(result.data);
+      }
+    },250);
+  }catch(e){
+    stopScan();
+    toast("Kamera nicht verfügbar. Öffne die Datei über localhost oder nutze JSON.");
+  }
+}
+
+function stopScan(){
+  if(scanTimer)clearInterval(scanTimer);
+  scanTimer=null;
+  if(scanStream)scanStream.getTracks().forEach(t=>t.stop());
+  scanStream=null;
+  const video=document.getElementById("camera");
+  video.srcObject=null;video.style.display="none";
+  document.getElementById("stopCamera").style.display="none";
+  document.getElementById("startCamera").style.display="block";
+}
+
+function restoreBackup(text){
+  let data;
+  try{data=JSON.parse(text);}catch(e){toast("QR-Code enthält ungültige Daten.");return;}
+
+  if(!data||data.format!=="SPRITE-HUNTERS-BACKUP"||
+     !data.owned||typeof data.gold!=="number"){
+    toast("Das ist keine gültige Sicherung.");return;
+  }
+
+  // Die Sicherung muss zur lokal gespeicherten Kennung passen.
+  if(data.browserId!==browserId||data.ownerToken!==ownerToken){
+    toast("Dieser QR-Code gehört zu einer anderen lokalen Browser-Kennung.");return;
+  }
+
+  for(const [id,entry] of Object.entries(data.owned)){
+    if(!entry||!Array.isArray(entry.instances))continue;
+    if(!game.owned[id])game.owned[id]={instances:[]};
+    const current=game.owned[id].instances;
+    const known=new Set(current.map(x=>x.instanceId));
+    for(const instance of entry.instances){
+      if(instance&&instance.instanceId&&!known.has(instance.instanceId)){
+        current.push(instance);known.add(instance.instanceId);
+      }
+    }
+  }
+
+  game.gold=data.gold;
+  game.nextSerial=Math.max(game.nextSerial,Number(data.nextSerial)||1);
+  saveGame();renderCollection();renderLastPack();
+  toast("Sammlung wiederhergestellt!");
+}
+
+function importJSON(){
+  const file=document.getElementById("jsonFile").files[0];
+  if(!file){toast("Wähle zuerst eine JSON-Sicherung aus.");return;}
+  const reader=new FileReader();
+  reader.onload=()=>restoreBackup(reader.result);
+  reader.readAsText(file);
+}
+
+updateStats();
+renderCollection();
+renderLastPack();
+</script>
+</body>
+</html>

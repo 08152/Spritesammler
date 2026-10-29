@@ -3,1442 +3,582 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SkyCards — Collect the Extraordinary</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>SkyCards</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
-:root {
-  --bg: #eaf6ff;
-  --blue: #2589ed;
-  --blue2: #63c2ff;
-  --dark: #173b63;
-  --muted: #7190ae;
-  --white: #fff;
-  --gold: #ffcf55;
-  --glass: rgba(255,255,255,.76);
-  --shadow: 0 15px 40px rgba(54,126,190,.13);
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-* { box-sizing: border-box; }
-
-html { scroll-behavior: smooth; }
-
-body {
+html, body {
   margin: 0;
-  min-height: 100vh;
-  overflow-x: hidden;
-  color: var(--dark);
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
-  background:
-    radial-gradient(ellipse at 12% 4%, #fff 0, transparent 33%),
-    radial-gradient(ellipse at 90% 30%, #c5e8ff 0, transparent 35%),
-    linear-gradient(150deg, #eef9ff, #d5edff 55%, #f8fcff);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+  background: #eef7ff;
+  color: #172c49;
 }
 
-body::before {
-  content: "";
+button {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  touch-action: manipulation;
+}
+
+#startScreen {
   position: fixed;
   inset: 0;
-  pointer-events: none;
-  opacity: .25;
-  z-index: -1;
-  background-image:
-    radial-gradient(circle, white 1px, transparent 1.5px);
-  background-size: 35px 35px;
-  animation: starDrift 35s linear infinite;
-}
-
-button, input { font: inherit; }
-button { -webkit-tap-highlight-color: transparent; }
-
-button:focus-visible,
-input:focus-visible {
-  outline: 3px solid #ffca4a;
-  outline-offset: 4px;
-}
-
-button:disabled {
-  opacity: .45;
-  cursor: not-allowed;
-  transform: none !important;
-  filter: grayscale(.35);
-}
-
-header {
-  position: relative;
-  overflow: hidden;
-  padding: 28px 16px 24px;
-  text-align: center;
-  background: linear-gradient(120deg, #ffffffd9, #d7efffd9);
-  border-bottom: 1px solid #fff;
-}
-
-.header-glow {
-  position: absolute;
-  width: 260px;
-  height: 260px;
-  border-radius: 50%;
-  background: #6dc7ff44;
-  filter: blur(45px);
-  top: -150px;
-  left: calc(50% - 130px);
-  animation: glowPulse 5s ease-in-out infinite;
-}
-
-.logo {
-  position: relative;
-  display: inline-block;
-  margin: 0;
-  font-size: clamp(38px, 7vw, 68px);
-  font-weight: 1000;
-  letter-spacing: -3px;
-  color: #2489ed;
-  background: linear-gradient(120deg, #1275dc, #69caff, #2489ed);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: logoFloat 4s ease-in-out infinite;
-}
-
-.logo span { letter-spacing: -1px; }
-
-.tagline {
-  position: relative;
-  margin-top: 7px;
-  color: #6889a7;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.topbar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  padding: 18px 12px 8px;
-}
-
-.stat {
+  z-index: 10;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 130px;
-  padding: 11px 17px;
-  border: 1px solid white;
+  justify-content: center;
+  background: linear-gradient(145deg, #ffffff, #dceeff);
+}
+
+#startButton {
+  padding: 22px 65px;
+  border-radius: 22px;
+  color: white;
+  background: linear-gradient(135deg, #55baff, #287be8);
+  font-size: 25px;
+  font-weight: 800;
+  box-shadow: 0 12px 30px #287be844;
+  transition: transform .2s, box-shadow .2s;
+}
+
+#startButton:active {
+  transform: scale(.94);
+  box-shadow: 0 4px 12px #287be833;
+}
+
+#game {
+  display: none;
+  position: fixed;
+  inset: 0;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+  background: #dceeff;
+}
+
+/* Verhindert manuelles Verschieben und Zoomen */
+.leaflet-container {
+  touch-action: none;
+  cursor: default !important;
+}
+
+.leaflet-control-container {
+  display: none;
+}
+
+.leaflet-pane,
+.leaflet-marker-pane {
+  pointer-events: none;
+}
+
+.leaflet-marker-icon {
+  pointer-events: auto;
+}
+
+#libraryButton {
+  position: absolute;
+  z-index: 1000;
+  right: 20px;
+  bottom: 22px;
+  width: 66px;
+  height: 66px;
+  border-radius: 22px;
+  color: #2378db;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 5px 25px #153c6528;
+  font-size: 28px;
+  transition: transform .2s;
+}
+
+#libraryButton:active {
+  transform: scale(.9);
+}
+
+.playerIcon {
+  width: 24px;
+  height: 24px;
+  border: 4px solid white;
+  border-radius: 50%;
+  background: #2587ff;
+  box-shadow: 0 0 0 8px #2587ff30, 0 2px 8px #0003;
+}
+
+.questionMarker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
   border-radius: 17px;
-  background: var(--glass);
-  box-shadow: 0 7px 22px #6aa8d51c;
-  backdrop-filter: blur(12px);
-  animation: statEnter .6s both;
-  transition: transform .25s, box-shadow .25s;
-}
-
-.stat:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 26px #6aa8d535;
-}
-
-.stat-icon { font-size: 23px; }
-
-.stat-label {
-  font-size: 10px;
-  color: var(--muted);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.stat-value {
-  font-size: 18px;
-  font-weight: 900;
-}
-
-nav {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 14px 12px 20px;
-}
-
-.btn {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid #ffffff85;
-  border-radius: 14px;
-  padding: 12px 19px;
   color: white;
-  font-weight: 850;
-  cursor: pointer;
-  background: linear-gradient(135deg, #62c2ff, #2384e9);
-  box-shadow: 0 5px 0 #1767bd, 0 9px 18px #3389d52b;
-  transition:
-    transform .2s cubic-bezier(.2,.8,.2,1),
-    box-shadow .2s,
-    filter .2s;
+  background: linear-gradient(145deg, #68c5ff, #2478ed);
+  border: 3px solid white;
+  box-shadow: 0 5px 18px #2378db55;
+  font-size: 28px;
+  font-weight: 900;
+  animation: questionFloat 1.8s ease-in-out infinite;
 }
 
-.btn::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  top: -60%;
-  left: -80%;
-  width: 45%;
-  height: 220%;
-  transform: rotate(25deg);
-  background: linear-gradient(90deg, transparent, #ffffff80, transparent);
-  transition: left .5s;
+@keyframes questionFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.05); }
 }
 
-.btn:hover::before { left: 140%; }
-
-.btn:hover {
-  transform: translateY(-3px) scale(1.025);
-  box-shadow: 0 8px 0 #1767bd, 0 15px 24px #3389d544;
-  filter: brightness(1.05);
+#libraryScreen,
+#rewardScreen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: linear-gradient(145deg, #fafdff, #e5f2ff);
 }
 
-.btn:active {
-  transform: translateY(3px) scale(.98);
-  box-shadow: 0 2px 0 #1767bd;
-}
-
-.btn.secondary {
-  color: #347bb6;
-  background: white;
-  border-color: #c8e8ff;
-  box-shadow: 0 4px 0 #b4d9f2, 0 8px 15px #3389d51b;
-}
-
-.btn.secondary:hover {
-  box-shadow: 0 7px 0 #b4d9f2, 0 12px 22px #3389d533;
-}
-
-.btn.gold-btn {
-  background: linear-gradient(135deg, #ffe99a, #ffb82e);
-  color: #754900;
-  box-shadow: 0 5px 0 #d59617, 0 9px 20px #f8bc4240;
-}
-
-.btn.gold-btn:hover {
-  box-shadow: 0 8px 0 #d59617, 0 15px 24px #f8bc4255;
-}
-
-main {
-  width: min(1180px, 94%);
-  margin: 0 auto 50px;
-}
-
-.panel {
-  padding: clamp(16px, 3vw, 28px);
-  margin: 12px 0 22px;
-  border-radius: 26px;
-  border: 1px solid #ffffff;
-  background: var(--glass);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(15px);
-  animation: panelEnter .45s ease both;
-}
-
-.panel[hidden] { display: none !important; }
-
-.section-head {
+#libraryHeader {
+  height: 76px;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 18px;
+  padding: 0 20px;
 }
 
-h2 {
-  margin: 0;
-  color: #267dc3;
-  font-size: clamp(22px, 4vw, 30px);
-  letter-spacing: -.7px;
+#libraryHeader button,
+#rewardBack {
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  color: #287be8;
+  background: white;
+  box-shadow: 0 3px 12px #17477c15;
+  font-size: 24px;
 }
 
-h3 { color: var(--dark); }
-
-.description {
-  margin: 8px 0 20px;
-  color: #6886a2;
-  line-height: 1.6;
-}
-
-.pack-grid {
+#collection {
+  height: calc(100% - 76px);
+  overflow-y: auto;
+  padding: 16px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 19px;
-}
-
-.pack {
-  position: relative;
-  overflow: hidden;
-  text-align: center;
-  padding: 19px;
-  border-radius: 23px;
-  background: linear-gradient(150deg, #fff, #e3f4ff);
-  border: 1px solid white;
-  box-shadow: 0 8px 22px #579bd51a;
-  transition: transform .3s, box-shadow .3s;
-}
-
-.pack::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  width: 180px;
-  height: 180px;
-  right: -100px;
-  top: -100px;
-  border-radius: 50%;
-  background: #8dd6ff4a;
-  transition: transform .5s;
-}
-
-.pack:hover {
-  transform: translateY(-7px);
-  box-shadow: 0 18px 35px #579bd52b;
-}
-
-.pack:hover::after { transform: scale(2); }
-
-.pack-art {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 120px;
-  height: 150px;
-  margin: 5px auto 18px;
-  border-radius: 19px;
-  border: 2px solid #ffffffa8;
-  background: linear-gradient(145deg, #8bdcff, #3589ef 70%, #2466cf);
-  box-shadow: 0 12px 22px #3486d544, inset 0 0 25px #ffffff66;
-  color: white;
-  font-size: 55px;
-  animation: packFloat 3s ease-in-out infinite;
-  transform-origin: center;
-}
-
-.pack:nth-child(2) .pack-art {
-  background: linear-gradient(145deg, #d4c9ff, #8c7bfa 70%, #5b54d6);
-  animation-delay: -.7s;
-}
-
-.pack:nth-child(3) .pack-art {
-  background: linear-gradient(145deg, #b6b4ff, #7254da 70%, #372d9c);
-  animation-delay: -1.4s;
-}
-
-.pack h3 { margin: 8px 0; }
-
-.pack p {
-  min-height: 40px;
-  line-height: 1.5;
-  color: #718da7;
-  font-size: 14px;
-}
-
-.price {
-  color: #ae7c09;
-  font-weight: 900;
-  margin: 15px 0;
-}
-
-.pack .btn { width: 100%; }
-
-#status {
-  min-height: 25px;
-  text-align: center;
-  margin: 18px 0 0;
-  color: #267dc3;
-  font-weight: 800;
-}
-
-#status.error { color: #d34d62; }
-#status.success { color: #208e6b; }
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+  align-content: start;
+  gap: 15px;
 }
 
 .card {
-  position: relative;
-  isolation: isolate;
+  aspect-ratio: 3 / 4.2;
+  border-radius: 17px;
   overflow: hidden;
-  min-width: 0;
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  display: flex;
-  flex-direction: column;
-  padding: 9px;
-  border-radius: 19px;
-  border: 2px solid #9ed4fa;
-  background: linear-gradient(155deg, #fff, #dcefff);
-  box-shadow: 0 8px 20px #3e8bc222;
-  animation: cardEnter .5s cubic-bezier(.2,.8,.2,1) both;
-  transition: transform .25s, box-shadow .25s;
-}
-
-.card:hover {
-  transform: translateY(-7px) rotate(-1deg);
-  box-shadow: 0 17px 30px #3e8bc244;
-}
-
-.card.legendary {
-  border: 3px solid #ffca46;
-  background: linear-gradient(145deg, #fffbe4, #ffe18a, #fff6d4);
-  box-shadow: 0 0 16px #ffca4666, 0 10px 25px #c69b3133;
-}
-
-.card.legendary::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  width: 250%;
-  height: 35%;
-  left: -80%;
-  top: -20%;
-  transform: rotate(-35deg);
-  background: linear-gradient(90deg, transparent, #ffffffa0, transparent);
-  animation: legendaryShine 4s ease-in-out infinite;
-}
-
-.card-image-wrap {
   position: relative;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  flex: 1;
-  min-height: 0;
-  border-radius: 12px;
-  background: #dcefff;
-  border: 1px solid #ffffff;
+  background: linear-gradient(145deg, #cce9ff, #76baff);
+  box-shadow: 0 5px 15px #245d941c;
+  animation: cardAppear .35s ease both;
 }
 
-.legendary .card-image-wrap {
-  background: linear-gradient(145deg, #fff5bf, #ffe69b);
-}
-
-.card-image {
+.card img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  transition: transform .35s;
+  object-fit: cover;
 }
 
-.card:hover .card-image { transform: scale(1.06); }
-
-.image-fallback {
-  display: none;
-  color: #718da7;
-  font-size: 12px;
-  padding: 10px;
-}
-
-.card h3 {
-  overflow-wrap: anywhere;
-  margin: 8px 0 4px;
-  font-size: 16px;
-}
-
-.rarity {
-  align-self: center;
-  display: inline-block;
-  max-width: 100%;
-  padding: 4px 10px;
-  border-radius: 30px;
-  background: #d9efff;
-  color: #276ba4;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.legendary .rarity {
-  background: #ffda67;
-  color: #765000;
-}
-
-.card-meta {
-  padding-top: 6px;
+.cardName {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 7px;
+  color: white;
   text-align: center;
-  color: #64809a;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.chance {
-  color: #3276b2;
-  font-weight: 800;
-}
-
-.legendary .chance { color: #946000; }
-
-#reveal {
-  display: none;
-  overflow: hidden;
-}
-
-#reveal.active { display: block; }
-
-.reveal-title {
-  text-align: center;
-  margin-bottom: 22px;
-}
-
-.reveal-title h2 { font-size: clamp(26px, 5vw, 38px); }
-
-.reveal-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(175px, 220px));
-  justify-content: center;
-  gap: 20px;
-  padding: 8px 0 24px;
-}
-
-.reveal-grid .card {
-  animation: cardReveal .75s cubic-bezier(.2,.8,.2,1) both;
-}
-
-.collection-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-input[type="search"],
-input[type="file"] {
-  min-width: 0;
-  max-width: 100%;
-  padding: 12px;
-  border: 2px solid #c8e8ff;
-  border-radius: 13px;
-  background: white;
-  color: var(--dark);
-}
-
-.empty {
-  grid-column: 1 / -1;
-  padding: 40px 15px;
-  text-align: center;
-  color: #7693ac;
-  background: #ffffff85;
-  border-radius: 18px;
-  border: 1px dashed #afd8f5;
-}
-
-.save-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 15px 0;
-}
-
-.help-text {
-  color: #718da7;
-  line-height: 1.65;
   font-size: 14px;
-}
-
-footer {
-  text-align: center;
-  padding: 25px 12px 40px;
-  color: #6486a5;
-  font-size: 13px;
-}
-
-.toast {
-  position: fixed;
-  z-index: 20;
-  left: 50%;
-  bottom: 25px;
-  transform: translate(-50%, 30px);
-  opacity: 0;
-  pointer-events: none;
-  max-width: 90%;
-  padding: 13px 20px;
-  border: 1px solid white;
-  border-radius: 15px;
-  color: #194a78;
-  background: #ffffffef;
-  box-shadow: 0 10px 35px #286ba833;
-  text-align: center;
   font-weight: 800;
-  transition: opacity .25s, transform .25s;
+  background: linear-gradient(transparent, #112b50dd);
 }
 
-.toast.show {
-  opacity: 1;
-  transform: translate(-50%, 0);
+#rewardScreen {
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 25px;
 }
 
-.sparkle {
-  position: fixed;
-  z-index: 15;
-  pointer-events: none;
-  font-size: 20px;
-  animation: sparkleFly .8s ease-out forwards;
+#rewardCard {
+  width: min(72vw, 300px);
+  aspect-ratio: 3 / 4.2;
+  border-radius: 24px;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(145deg, #cce9ff, #76baff);
+  box-shadow: 0 18px 50px #1a5aa43b;
+  animation: rewardReveal .55s cubic-bezier(.2,.8,.2,1) both;
 }
 
-@keyframes logoFloat {
-  0%,100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+#rewardCard img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-@keyframes glowPulse {
-  0%,100% { opacity: .45; transform: scale(.9); }
-  50% { opacity: .9; transform: scale(1.15); }
+#rewardName {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px 8px;
+  color: white;
+  text-align: center;
+  font-weight: 900;
+  font-size: 22px;
+  background: linear-gradient(transparent, #112b50ed);
 }
 
-@keyframes starDrift {
-  from { background-position: 0 0; }
-  to { background-position: 140px 280px; }
+#rewardBack {
+  width: auto;
+  min-width: 160px;
+  padding: 0 24px;
+  font-size: 16px;
+  font-weight: 800;
 }
 
-@keyframes statEnter {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes panelEnter {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes packFloat {
-  0%,100% { transform: translateY(0) rotate(-2deg); }
-  50% { transform: translateY(-7px) rotate(2deg); }
-}
-
-@keyframes cardEnter {
-  from { opacity: 0; transform: translateY(12px) scale(.95); }
+@keyframes cardAppear {
+  from { opacity: 0; transform: translateY(10px) scale(.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes cardReveal {
-  0% { opacity: 0; transform: perspective(600px) rotateY(90deg) scale(.75); }
-  70% { opacity: 1; transform: perspective(600px) rotateY(-8deg) scale(1.04); }
-  100% { opacity: 1; transform: perspective(600px) rotateY(0) scale(1); }
-}
-
-@keyframes legendaryShine {
-  0%, 45% { left: -100%; }
-  75%, 100% { left: 150%; }
-}
-
-@keyframes sparkleFly {
-  from { opacity: 1; transform: translate(0,0) scale(.5) rotate(0); }
-  to { opacity: 0; transform: translate(var(--dx),var(--dy)) scale(1.5) rotate(150deg); }
-}
-
-@media (max-width: 500px) {
-  .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .card { padding: 7px; border-radius: 15px; }
-  .card h3 { font-size: 14px; }
-  .card-meta { font-size: 10px; }
-  .panel { border-radius: 20px; }
-  .stat { min-width: 125px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: .01ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: .01ms !important;
-  }
+@keyframes rewardReveal {
+  from { opacity: 0; transform: scale(.65) rotate(-7deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
 }
 </style>
 </head>
 
 <body>
-
-<header>
-  <div class="header-glow"></div>
-  <h1 class="logo">☁️ SkyCards</h1>
-  <div class="tagline">Collect the extraordinary</div>
-</header>
-
-<div class="topbar">
-  <div class="stat">
-    <span class="stat-icon">🪙</span>
-    <div>
-      <div class="stat-label">Dein Gold</div>
-      <div class="stat-value" id="gold">500</div>
-    </div>
-  </div>
-
-  <div class="stat">
-    <span class="stat-icon">🃏</span>
-    <div>
-      <div class="stat-label">Gesammelt</div>
-      <div class="stat-value" id="cardCount">0</div>
-    </div>
-  </div>
-
-  <div class="stat">
-    <span class="stat-icon">✨</span>
-    <div>
-      <div class="stat-label">Entdeckt</div>
-      <div class="stat-value" id="uniqueCount">0</div>
-    </div>
-  </div>
+<div id="startScreen">
+  <button id="startButton">STARTEN</button>
 </div>
 
-<nav>
-  <button class="btn" onclick="showSection('shop')">🛍️ Shop</button>
-  <button class="btn secondary" onclick="showSection('collection')">📚 Sammlung</button>
-  <button class="btn secondary" onclick="showSection('save')">💾 Spielstand</button>
-  <button class="btn secondary" id="soundButton" onclick="toggleSound()">🔊 Sound an</button>
-</nav>
+<div id="game">
+  <div id="map"></div>
+  <button id="libraryButton" aria-label="Bibliothek öffnen">▤</button>
+</div>
 
-<main>
-  <section id="shop" class="panel">
-    <div class="section-head">
-      <h2>🛍️ Pack-Shop</h2>
-    </div>
+<div id="libraryScreen">
+  <div id="libraryHeader">
+    <button id="libraryBack" aria-label="Zurück">‹</button>
+    <strong>Bibliothek</strong>
+    <div style="width:46px"></div>
+  </div>
+  <div id="collection"></div>
+</div>
 
-    <p class="description">
-      Öffne Packs, entdecke seltene Karten und vervollständige deine Sammlung.
-      Jede Karte kannst du nur einmal sammeln.
-    </p>
+<div id="rewardScreen">
+  <div id="rewardCard">
+    <img id="rewardImage" alt="">
+    <div id="rewardName"></div>
+  </div>
+  <button id="rewardBack">Weiter</button>
+</div>
 
-    <div class="pack-grid">
-      <article class="pack">
-        <div class="pack-art">☁️</div>
-        <h3>Himmels-Pack</h3>
-        <p>Bis zu 3 verschiedene Karten</p>
-        <div class="price">🪙 50 Gold</div>
-        <button class="btn" onclick="openPack('sky')">Pack öffnen</button>
-      </article>
-
-      <article class="pack">
-        <div class="pack-art">💎</div>
-        <h3>Kristall-Pack</h3>
-        <p>Bis zu 5 verschiedene Karten</p>
-        <div class="price">🪙 100 Gold</div>
-        <button class="btn" onclick="openPack('crystal')">Pack öffnen</button>
-      </article>
-
-      <article class="pack">
-        <div class="pack-art">🌌</div>
-        <h3>Kosmos-Pack</h3>
-        <p>Bis zu 7 verschiedene Karten</p>
-        <div class="price">🪙 1.000.000 Gold</div>
-        <button class="btn gold-btn" onclick="openPack('cosmos')">Pack öffnen</button>
-      </article>
-    </div>
-
-    <div id="status" role="status" aria-live="polite"></div>
-  </section>
-
-  <section id="reveal" class="panel">
-    <div class="reveal-title">
-      <h2>✨ Neue Entdeckungen!</h2>
-      <p class="description">Welche Karten hast du gefunden?</p>
-    </div>
-    <div id="revealGrid" class="reveal-grid"></div>
-    <div style="text-align:center">
-      <button class="btn" onclick="closeReveal()">Weiter →</button>
-    </div>
-  </section>
-
-  <section id="collection" class="panel" hidden>
-    <div class="section-head">
-      <h2>📚 Deine Sammlung</h2>
-    </div>
-    <div class="collection-tools">
-      <input id="searchCards" type="search" placeholder="🔎 Karte suchen..." oninput="renderCollection()">
-      <button class="btn secondary" onclick="renderCollection()">Aktualisieren</button>
-    </div>
-    <div id="collectionGrid" class="card-grid"></div>
-  </section>
-
-  <section id="save" class="panel" hidden>
-    <h2>💾 Spielstand</h2>
-    <p class="description">
-      Dein Spielstand wird automatisch in diesem Browser gespeichert.
-      Exportiere eine Sicherung, um deinen Fortschritt zu behalten.
-    </p>
-
-    <div class="save-actions">
-      <button class="btn" onclick="exportSave()">⬇️ Sicherung exportieren</button>
-    </div>
-
-    <h3>Sicherung importieren</h3>
-    <input id="importFile" type="file" accept=".json,application/json">
-    <div class="save-actions">
-      <button class="btn secondary" onclick="importSave()">⬆️ Importieren</button>
-    </div>
-
-    <p id="saveStatus" class="help-text" role="status"></p>
-
-    <hr style="border:0;border-top:1px solid #c8e8ff;margin:25px 0">
-
-    <h3>Spielstand zurücksetzen</h3>
-    <p class="help-text">Dabei gehen Gold und gesammelte Karten dieses Browser-Spielstands verloren.</p>
-    <button class="btn" style="background:linear-gradient(135deg,#ff9393,#d84455);box-shadow:0 5px 0 #ad2938" onclick="resetGame()">Spielstand zurücksetzen</button>
-  </section>
-</main>
-
-<footer>SkyCards · Deine Sammlung, dein Abenteuer ☁️</footer>
-<div id="toast" class="toast" aria-live="polite"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-"use strict";
+const startScreen = document.getElementById("startScreen");
+const startButton = document.getElementById("startButton");
+const game = document.getElementById("game");
+const libraryButton = document.getElementById("libraryButton");
+const libraryScreen = document.getElementById("libraryScreen");
+const libraryBack = document.getElementById("libraryBack");
+const collection = document.getElementById("collection");
+const rewardScreen = document.getElementById("rewardScreen");
+const rewardBack = document.getElementById("rewardBack");
 
-/* ===================================================
-   KARTEN-DATENBANK
+let map;
+let playerMarker;
+let accuracyCircle;
+let gpsWatch = null;
+let playerPosition = null;
+let questionMarkers = [];
+let collected = new Set();
+let cardPool = [];
+let active = false;
+let lastSpawn = 0;
 
-   spawnChance ist das Gewicht für die Ziehung.
-   Blinky hat ein Gewicht von 2.4.
+const playerIcon = L.divIcon({
+  className: "",
+  html: '<div class="playerIcon"></div>',
+  iconSize: [24, 24],
+  iconAnchor: [12, 12]
+});
 
-   Damit Blinky bei einer Ziehung genau 2,4 % Chance hat,
-   müssen alle Karten zusammen ein Gesamtgewicht von 100
-   haben. Die Chance wird unter den noch nicht gesammelten
-   Karten neu berechnet.
-   =================================================== */
+function createMap(lat, lon) {
+  map = L.map("map", {
+    zoomControl: false,
+    attributionControl: false,
+    dragging: false,
+    touchZoom: false,
+    doubleClickZoom: false,
+    scrollWheelZoom: false,
+    boxZoom: false,
+    keyboard: false,
+    tap: false,
+    zoomSnap: 0.5
+  }).setView([lat, lon], 18);
 
-const sprites = [
-  {
-    id: "SPR-001-NORMAL",
-    baseId: "SPR-001",
-    name: "Blinky",
-    image: "1.png",
-    rarity: "Legendär",
-    variant: "Normal",
-    value: 1500,
-    spawnChance: 2.4
-  }
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 20
+  }).addTo(map);
 
-,{
-  id: "SPR-002-NORMAL",
-  baseId: "SPR-002",
-  name: "Oreling",
-  image: "2.png",
-  rarity: "selten",
-  variant: "Normal",
-  value: 500,
-  spawnChance: 25
+  playerMarker = L.marker([lat, lon], {
+    icon: playerIcon,
+    interactive: false,
+    keyboard: false
+  }).addTo(map);
+
+  accuracyCircle = L.circle([lat, lon], {
+    radius: 10,
+    color: "#2587ff",
+    weight: 1,
+    fillColor: "#2587ff",
+    fillOpacity: 0.1,
+    interactive: false
+  }).addTo(map);
+
+  map.on("drag", () => {
+    if (playerPosition) map.panTo(playerPosition, { animate: false });
+  });
 }
 
-];
-
-const SAVE_KEY = "skyCardsSaveV1";
-
-const packs = {
-  sky: {
-    name: "Himmels-Pack",
-    price: 50,
-    count: 3
-  },
-  crystal: {
-    name: "Kristall-Pack",
-    price: 100,
-    count: 5
-  },
-  cosmos: {
-    name: "Kosmos-Pack",
-    price: 1000000,
-    count: 7
-  }
-};
-
-/* ===================================================
-   SPIELSTAND
-   =================================================== */
-
-function initialSave() {
-  return {
-    gold: 500,
-    owned: [],
-    nextInstanceId: 1
-  };
-}
-
-function loadSave() {
+async function loadCards() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return initialSave();
-
-    const parsed = JSON.parse(raw);
-
-    const knownIds = new Set(sprites.map(card => card.id));
-    const seen = new Set();
-
-    const owned = Array.isArray(parsed.owned)
-      ? parsed.owned.filter(entry => {
-          if (!entry || !knownIds.has(entry.cardId)) return false;
-          if (seen.has(entry.cardId)) return false;
-          seen.add(entry.cardId);
-          return true;
-        })
-      : [];
-
-    return {
-      gold: Number.isFinite(parsed.gold)
-        ? Math.max(0, Math.floor(parsed.gold))
-        : 500,
-      owned,
-      nextInstanceId: Number.isInteger(parsed.nextInstanceId)
-        ? Math.max(parsed.nextInstanceId, owned.length + 1)
-        : owned.length + 1
-    };
+    const response = await fetch("cards.json", { cache: "no-store" });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
   } catch {
-    return initialSave();
+    return [];
   }
 }
 
-let save = loadSave();
-let soundEnabled = true;
-let audioContext = null;
-let toastTimer = null;
+function startGame() {
+  if (!navigator.geolocation) return;
 
-/* ===================================================
-   SOUND-EFFEKTE
-   Funktioniert über Web Audio nach einer Nutzeraktion.
-   Keine externen Audiodateien erforderlich.
-   =================================================== */
+  startScreen.style.display = "none";
+  game.style.display = "block";
+  active = true;
 
-function playTone(frequency, duration, type = "sine", volume = 0.045, delay = 0) {
-  if (!soundEnabled) return;
+  if (map) {
+    map.invalidateSize();
+  }
 
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      updatePosition(position);
+      if (!map) {
+        createMap(
+          position.coords.latitude,
+          position.coords.longitude
+        );
+      } else {
+        map.invalidateSize();
+        map.setView(playerPosition, 18, { animate: false });
+      }
 
-    if (!audioContext) audioContext = new AudioCtx();
-
-    if (audioContext.state === "suspended") {
-      audioContext.resume();
+      if (gpsWatch === null) {
+        gpsWatch = navigator.geolocation.watchPosition(
+          updatePosition,
+          () => {},
+          {
+            enableHighAccuracy: true,
+            maximumAge: 1000,
+            timeout: 20000
+          }
+        );
+      }
+    },
+    () => {
+      active = false;
+      startScreen.style.display = "flex";
+      game.style.display = "none";
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 1000,
+      timeout: 20000
     }
-
-    const start = audioContext.currentTime + delay;
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, start);
-
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-
-    oscillator.connect(gain);
-    gain.connect(audioContext.destination);
-
-    oscillator.start(start);
-    oscillator.stop(start + duration + 0.02);
-  } catch (error) {
-    // Sound ist optional; das Spiel funktioniert auch ohne Audio.
-  }
-}
-
-function playClick() {
-  playTone(550, 0.07, "sine", 0.025);
-}
-
-function playPackSound() {
-  playTone(280, 0.14, "triangle", 0.045);
-  playTone(420, 0.17, "triangle", 0.04, 0.12);
-  playTone(620, 0.22, "sine", 0.035, 0.25);
-}
-
-function playLegendarySound() {
-  playTone(523.25, 0.3, "sine", 0.05);
-  playTone(659.25, 0.3, "sine", 0.05, 0.12);
-  playTone(783.99, 0.42, "sine", 0.05, 0.24);
-  playTone(1046.5, 0.6, "sine", 0.045, 0.38);
-}
-
-function toggleSound() {
-  soundEnabled = !soundEnabled;
-
-  document.getElementById("soundButton").textContent =
-    soundEnabled ? "🔊 Sound an" : "🔇 Sound aus";
-
-  if (soundEnabled) playClick();
-
-  showToast(soundEnabled ? "Sound eingeschaltet" : "Sound ausgeschaltet");
-}
-
-/* ===================================================
-   HILFSFUNKTIONEN
-   =================================================== */
-
-function escapeHTML(value) {
-  return String(value).replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[char]);
-}
-
-function showToast(message) {
-  const toast = document.getElementById("toast");
-  toast.textContent = message;
-  toast.classList.add("show");
-
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.classList.remove("show");
-  }, 2600);
-}
-
-function setStatus(message, type = "") {
-  const status = document.getElementById("status");
-  status.textContent = message;
-  status.className = type;
-}
-
-function saveGame() {
-  try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
-  } catch {
-    showToast("Speichern fehlgeschlagen: Browser-Speicher möglicherweise voll.");
-  }
-
-  updateStats();
-}
-
-function updateStats() {
-  document.getElementById("gold").textContent =
-    save.gold.toLocaleString("de-DE");
-
-  document.getElementById("cardCount").textContent =
-    save.owned.length;
-
-  document.getElementById("uniqueCount").textContent =
-    new Set(save.owned.map(card => card.cardId)).size;
-}
-
-function getSprite(id) {
-  return sprites.find(sprite => sprite.id === id);
-}
-
-function getOwnedIds() {
-  return new Set(save.owned.map(card => card.cardId));
-}
-
-/* ===================================================
-   NAVIGATION
-   =================================================== */
-
-function showSection(id) {
-  playClick();
-
-  for (const sectionId of ["shop", "collection", "save"]) {
-    document.getElementById(sectionId).hidden = sectionId !== id;
-  }
-
-  document.getElementById("reveal").classList.remove("active");
-
-  if (id === "collection") renderCollection();
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function closeReveal() {
-  playClick();
-  document.getElementById("reveal").classList.remove("active");
-  document.getElementById("shop").hidden = false;
-}
-
-/* ===================================================
-   SPAWNCHANCEN UND GEWICHTETE ZIEHUNG
-
-   Beispiel:
-   Blinky: 2.4
-   Andere Karte: 97.6
-   Gesamt: 100
-
-   Bei zwei noch verfügbaren Karten entspricht das
-   den Chancen 2,4 % und 97,6 %.
-
-   Bereits gesammelte Karten werden ausgeschlossen.
-   Deshalb werden die Chancen unter den verbleibenden
-   Karten neu normalisiert.
-   =================================================== */
-
-function weightedDraw(pool) {
-  const validPool = pool.filter(card =>
-    Number.isFinite(Number(card.spawnChance)) &&
-    Number(card.spawnChance) > 0
   );
-
-  const totalWeight = validPool.reduce(
-    (sum, card) => sum + Number(card.spawnChance),
-    0
-  );
-
-  if (totalWeight <= 0) return null;
-
-  let roll = Math.random() * totalWeight;
-
-  for (const card of validPool) {
-    roll -= Number(card.spawnChance);
-
-    if (roll < 0) return card;
-  }
-
-  return validPool[validPool.length - 1] || null;
 }
 
-/* ===================================================
-   PACK ÖFFNEN
-   =================================================== */
+function updatePosition(position) {
+  if (!active) return;
 
-function openPack(type) {
-  const pack = packs[type];
+  const lat = position.coords.latitude;
+  const lon = position.coords.longitude;
+  playerPosition = L.latLng(lat, lon);
 
-  if (!pack) return;
-
-  const ownedIds = getOwnedIds();
-
-  let available = sprites.filter(sprite =>
-    !ownedIds.has(sprite.id) &&
-    Number(sprite.spawnChance) > 0
-  );
-
-  if (available.length === 0) {
-    setStatus("Du hast alle verfügbaren Karten gesammelt!", "success");
-    showToast("Sammlung vollständig! ✨");
+  if (!map) {
+    createMap(lat, lon);
     return;
   }
 
-  if (save.gold < pack.price) {
-    setStatus("Du hast nicht genug Gold!", "error");
-    playTone(180, 0.12, "square", 0.025);
-    return;
-  }
-
-  /*
-    Es werden höchstens so viele Karten gezogen,
-    wie noch ungesammelte Karten vorhanden sind.
-    Innerhalb eines Packs gibt es keine Duplikate.
-  */
-
-  const drawCount = Math.min(pack.count, available.length);
-  const pulled = [];
-
-  for (let i = 0; i < drawCount; i++) {
-    const chosen = weightedDraw(available);
-
-    if (!chosen) break;
-
-    pulled.push(chosen);
-    available = available.filter(card => card.id !== chosen.id);
-  }
-
-  if (pulled.length === 0) {
-    setStatus("Keine Karten mit gültiger Spawnchance verfügbar.", "error");
-    return;
-  }
-
-  save.gold -= pack.price;
-
-  for (const card of pulled) {
-    save.owned.push({
-      instanceId: save.nextInstanceId++,
-      cardId: card.id
-    });
-  }
-
-  saveGame();
-  playPackSound();
-
-  setStatus(
-    `${pack.name}: ${pulled.length} neue Karte${pulled.length === 1 ? "" : "n"}!`,
-    "success"
+  playerMarker.setLatLng(playerPosition);
+  accuracyCircle.setLatLng(playerPosition);
+  accuracyCircle.setRadius(
+    Math.max(5, position.coords.accuracy || 10)
   );
 
-  renderReveal(pulled);
+  // Die Karte folgt der GPS-Position, ohne manuelle Steuerung.
+  map.setView(playerPosition, map.getZoom(), { animate: false });
 
-  document.getElementById("reveal").classList.add("active");
+  maybeSpawnQuestion();
+  refreshQuestionDistances();
+}
 
-  document.getElementById("reveal").scrollIntoView({
-    behavior: "smooth",
-    block: "start"
+function distanceMeters(a, b) {
+  return map.distance(a, b);
+}
+
+function maybeSpawnQuestion() {
+  if (!playerPosition || !map || cardPool.length === 0) return;
+
+  const now = Date.now();
+
+  // Gelegentlich eine neue Frage in der näheren Umgebung.
+  if (now - lastSpawn < 45000) return;
+  if (questionMarkers.length >= 3) return;
+  if (Math.random() > 0.35) return;
+
+  lastSpawn = now;
+
+  const angle = Math.random() * Math.PI * 2;
+  const distance = 25 + Math.random() * 45;
+  const latOffset = (distance * Math.cos(angle)) / 111320;
+  const lonOffset =
+    (distance * Math.sin(angle)) /
+    (111320 * Math.cos(playerPosition.lat * Math.PI / 180));
+
+  const location = L.latLng(
+    playerPosition.lat + latOffset,
+    playerPosition.lng + lonOffset
+  );
+
+  const icon = L.divIcon({
+    className: "",
+    html: '<div class="questionMarker">?</div>',
+    iconSize: [48, 48],
+    iconAnchor: [24, 24]
   });
 
-  if (pulled.some(card => card.rarity === "Legendär")) {
-    setTimeout(playLegendarySound, 400);
-    createSparkles();
+  const marker = L.marker(location, {
+    icon,
+    keyboard: false,
+    riseOnHover: true
+  }).addTo(map);
+
+  const item = { marker, location };
+  questionMarkers.push(item);
+
+  marker.on("click", () => {
+    if (!playerPosition) return;
+
+    if (distanceMeters(playerPosition, location) <= 20) {
+      collectQuestion(item);
+    }
+  });
+}
+
+function refreshQuestionDistances() {
+  // Fragezeichen bleiben sichtbar; die Entfernung wird beim Antippen geprüft.
+}
+
+function collectQuestion(item) {
+  if (!playerPosition || distanceMeters(playerPosition, item.location) > 20) {
+    return;
   }
+
+  map.removeLayer(item.marker);
+  questionMarkers = questionMarkers.filter(q => q !== item);
+
+  const available = cardPool.filter(card => {
+    const id = card.id || card.name;
+    return id && !collected.has(id);
+  });
+
+  if (available.length === 0) return;
+
+  const card = available[Math.floor(Math.random() * available.length)];
+  const id = card.id || card.name;
+  collected.add(id);
+
+  document.getElementById("rewardImage").src = card.image || "";
+  document.getElementById("rewardImage").style.display =
+    card.image ? "block" : "none";
+  document.getElementById("rewardName").textContent = card.name || "";
+  rewardScreen.style.display = "flex";
+  rewardScreen.style.pointerEvents = "auto";
+  game.style.display = "none";
 }
 
-/* ===================================================
-   KARTEN-DARSTELLUNG
-   =================================================== */
-
-function makeCardHTML(sprite, index = 0) {
-  const legendary = sprite.rarity === "Legendär";
-  const rarityClass = legendary ? "legendary" : "";
-
-  return `
-    <article class="card ${rarityClass}"
-      style="animation-delay:${index * 0.09}s">
-
-      <div class="card-image-wrap">
-        <img
-          class="card-image"
-          src="${escapeHTML(sprite.image)}"
-          alt="${escapeHTML(sprite.name)}"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
-        >
-        <div class="image-fallback">
-          Bild nicht gefunden:<br>
-          ${escapeHTML(sprite.image)}
-        </div>
-      </div>
-
-      <h3>${escapeHTML(sprite.name)}</h3>
-
-      <span class="rarity">
-        ${escapeHTML(sprite.rarity)}
-      </span>
-
-      <div class="card-meta">
-        Variante: ${escapeHTML(sprite.variant)}<br>
-        Wert: 🪙 ${Number(sprite.value).toLocaleString("de-DE")}<br>
-        <span class="chance">
-          Spawnchance: ${Number(sprite.spawnChance).toLocaleString("de-DE")}%
-        </span>
-      </div>
-    </article>
-  `;
-}
-
-function renderReveal(pulled) {
-  const grid = document.getElementById("revealGrid");
-
-  /*
-    Karten mit niedrigerem Gewicht werden zuletzt gezeigt.
-    So erscheinen seltene Karten am Ende der Enthüllung.
-  */
-
-  const sorted = [...pulled].sort(
-    (a, b) => Number(a.spawnChance) - Number(b.spawnChance)
-  );
-
-  grid.innerHTML = sorted.map((card, index) =>
-    makeCardHTML(card, index)
-  ).join("");
+function openLibrary() {
+  game.style.display = "none";
+  libraryScreen.style.display = "block";
+  renderCollection();
 }
 
 function renderCollection() {
-  const grid = document.getElementById("collectionGrid");
-  const search = (
-    document.getElementById("searchCards").value || ""
-  ).trim().toLowerCase();
+  collection.innerHTML = "";
 
-  const ownedIds = [...getOwnedIds()];
+  cardPool
+    .filter(card => collected.has(card.id || card.name))
+    .forEach(card => {
+      const element = document.createElement("div");
+      element.className = "card";
 
-  const cards = ownedIds
-    .map(getSprite)
-    .filter(Boolean)
-    .filter(card =>
-      card.name.toLowerCase().includes(search) ||
-      card.rarity.toLowerCase().includes(search) ||
-      card.variant.toLowerCase().includes(search)
-    )
-    .sort((a, b) => {
-      if (a.rarity === "Legendär" && b.rarity !== "Legendär") return -1;
-      if (b.rarity === "Legendär" && a.rarity !== "Legendär") return 1;
-      return a.name.localeCompare(b.name, "de");
+      if (card.image) {
+        const image = document.createElement("img");
+        image.src = card.image;
+        image.alt = "";
+        element.appendChild(image);
+      }
+
+      const name = document.createElement("div");
+      name.className = "cardName";
+      name.textContent = card.name || "";
+      element.appendChild(name);
+
+      collection.appendChild(element);
     });
-
-  if (cards.length === 0) {
-    grid.innerHTML = `
-      <div class="empty">
-        ${ownedIds.length === 0
-          ? "Du hast noch keine Karten gesammelt. Öffne dein erstes Pack!"
-          : "Keine passenden Karten gefunden."}
-      </div>
-    `;
-    return;
-  }
-
-  grid.innerHTML = cards
-    .map((card, index) => makeCardHTML(card, index))
-    .join("");
 }
 
-/* ===================================================
-   EFFEKT-PARTIKEL
-   =================================================== */
+function returnToMap() {
+  rewardScreen.style.display = "none";
+  libraryScreen.style.display = "none";
+  game.style.display = "block";
 
-function createSparkles() {
-  const symbols = ["✨", "⭐", "💫", "🌟"];
-
-  for (let i = 0; i < 22; i++) {
-    const sparkle = document.createElement("div");
-
-    sparkle.className = "sparkle";
-    sparkle.textContent =
-      symbols[Math.floor(Math.random() * symbols.length)];
-
-    sparkle.style.left = Math.random() * 100 + "vw";
-    sparkle.style.top = Math.random() * 75 + "vh";
-    sparkle.style.setProperty("--dx", (Math.random() * 200 - 100) + "px");
-    sparkle.style.setProperty("--dy", (Math.random() * -180 - 30) + "px");
-
-    document.body.appendChild(sparkle);
-
-    setTimeout(() => sparkle.remove(), 1000);
-  }
-}
-
-/* ===================================================
-   SICHERUNG EXPORTIEREN UND IMPORTIEREN
-   =================================================== */
-
-function exportSave() {
-  playClick();
-
-  const data = JSON.stringify(save, null, 2);
-  const blob = new Blob([data], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = "SkyCards-Sicherung.json";
-  link.click();
-
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-  document.getElementById("saveStatus").textContent =
-    "Sicherung exportiert.";
-}
-
-function importSave() {
-  playClick();
-
-  const input = document.getElementById("importFile");
-  const file = input.files && input.files[0];
-
-  if (!file) {
-    document.getElementById("saveStatus").textContent =
-      "Bitte wähle zuerst eine JSON-Datei aus.";
-    return;
-  }
-
-  const reader = new FileReader();
-
-  reader.onload = () => {
-    try {
-      const imported = JSON.parse(reader.result);
-
-      if (
-        !Number.isFinite(imported.gold) ||
-        !Array.isArray(imported.owned)
-      ) {
-        throw new Error("Ungültiger Spielstand");
-      }
-
-      const knownIds = new Set(sprites.map(card => card.id));
-      const seen = new Set();
-      const owned = [];
-
-      for (const entry of imported.owned) {
-        if (!entry || !knownIds.has(entry.cardId)) continue;
-        if (seen.has(entry.cardId)) continue;
-
-        seen.add(entry.cardId);
-
-        owned.push({
-          instanceId: Number.isInteger(entry.instanceId)
-            ? entry.instanceId
-            : owned.length + 1,
-          cardId: entry.cardId
-        });
-      }
-
-      save = {
-        gold: Math.max(0, Math.floor(imported.gold)),
-        owned,
-        nextInstanceId: Math.max(
-          Number(imported.nextInstanceId) || 1,
-          owned.length + 1
-        )
-      };
-
-      saveGame();
-      renderCollection();
-
-      document.getElementById("saveStatus").textContent =
-        "Spielstand erfolgreich importiert.";
-
-      showToast("Spielstand geladen!");
-    } catch {
-      document.getElementById("saveStatus").textContent =
-        "Die Datei ist keine gültige SkyCards-Sicherung.";
+  if (map) {
+    map.invalidateSize();
+    if (playerPosition) {
+      map.setView(playerPosition, map.getZoom(), { animate: false });
     }
-  };
-
-  reader.readAsText(file);
-}
-
-function resetGame() {
-  playClick();
-
-  if (!confirm(
-    "Wirklich zurücksetzen? Alle Karten und dein Gold in diesem Browser-Spielstand gehen verloren."
-  )) return;
-
-  save = initialSave();
-  saveGame();
-
-  document.getElementById("reveal").classList.remove("active");
-  document.getElementById("saveStatus").textContent =
-    "Spielstand zurückgesetzt.";
-
-  renderCollection();
-  setStatus("Neuer Spielstand erstellt.", "success");
-  showToast("Neues Abenteuer gestartet!");
-}
-
-/* ===================================================
-   START
-   =================================================== */
-
-updateStats();
-renderCollection();
-
-/* Buttons bekommen beim Klicken einen Sound.
-   Die expliziten Spielaktionen behalten ihre eigenen Sounds. */
-document.addEventListener("click", event => {
-  const button = event.target.closest("button");
-
-  if (!button || button.disabled) return;
-
-  if (
-    button.onclick &&
-    button.id !== "soundButton" &&
-    !button.getAttribute("onclick")?.includes("openPack") &&
-    !button.getAttribute("onclick")?.includes("toggleSound") &&
-    !button.getAttribute("onclick")?.includes("exportSave") &&
-    !button.getAttribute("onclick")?.includes("importSave") &&
-    !button.getAttribute("onclick")?.includes("resetGame")
-  ) {
-    playClick();
   }
+}
+
+startButton.addEventListener("click", startGame);
+libraryButton.addEventListener("click", openLibrary);
+libraryBack.addEventListener("click", returnToMap);
+rewardBack.addEventListener("click", returnToMap);
+
+loadCards().then(cards => {
+  cardPool = cards;
 });
 </script>
-
 </body>
 </html>

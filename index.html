@@ -4,581 +4,870 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>SkyCards</title>
+<title>GHOST HUNT</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
-* {
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
+*{box-sizing:border-box}
+:root{
+  --bg:#080d19;
+  --panel:rgba(12,21,42,.94);
+  --blue:#399bff;
+  --purple:#9c65ff;
+  --text:#f3f6ff;
+  --muted:#8795b3;
 }
-
-html, body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  font-family: Arial, sans-serif;
-  background: #eef7ff;
-  color: #172c49;
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Arial,sans-serif;
+  overflow:hidden;
 }
-
-button {
-  border: 0;
-  cursor: pointer;
-  font: inherit;
-  touch-action: manipulation;
+#map{
+  position:fixed;
+  inset:0;
+  background:#101b2d;
+  z-index:1;
 }
-
-#startScreen {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(145deg, #ffffff, #dceeff);
+.leaflet-tile{
+  filter:brightness(.72) saturate(.75) hue-rotate(8deg);
 }
-
-#startButton {
-  padding: 22px 65px;
-  border-radius: 22px;
-  color: white;
-  background: linear-gradient(135deg, #55baff, #287be8);
-  font-size: 25px;
-  font-weight: 800;
-  box-shadow: 0 12px 30px #287be844;
-  transition: transform .2s, box-shadow .2s;
+.leaflet-control-attribution{
+  font-size:9px!important;
 }
-
-#startButton:active {
-  transform: scale(.94);
-  box-shadow: 0 4px 12px #287be833;
+#topbar{
+  position:fixed;
+  z-index:500;
+  top:15px;
+  left:15px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:12px 16px;
+  border:1px solid #344a70;
+  background:rgba(9,17,35,.91);
+  border-radius:15px;
+  box-shadow:0 5px 25px #0008;
+  backdrop-filter:blur(12px);
 }
-
-#game {
-  display: none;
-  position: fixed;
-  inset: 0;
+.logo{
+  font-size:17px;
+  font-weight:900;
+  letter-spacing:2px;
 }
-
-#map {
-  position: absolute;
-  inset: 0;
-  background: #dceeff;
+.logo span{color:#55aaff}
+#gpsStatus{
+  font-size:11px;
+  color:#8fa4c7;
+  margin-top:4px;
 }
-
-/* Verhindert manuelles Verschieben und Zoomen */
-.leaflet-container {
-  touch-action: none;
-  cursor: default !important;
+#locationButton{
+  position:fixed;
+  z-index:500;
+  bottom:105px;
+  left:15px;
+  width:48px;
+  height:48px;
+  border:1px solid #344c75;
+  border-radius:15px;
+  background:var(--panel);
+  color:white;
+  font-size:21px;
+  cursor:pointer;
 }
-
-.leaflet-control-container {
-  display: none;
+#menu{
+  position:fixed;
+  z-index:600;
+  right:14px;
+  bottom:18px;
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  padding:9px;
+  background:rgba(9,17,35,.94);
+  border:1px solid #34466b;
+  border-radius:19px;
+  backdrop-filter:blur(15px);
+  box-shadow:0 8px 35px #0008;
 }
-
-.leaflet-pane,
-.leaflet-marker-pane {
-  pointer-events: none;
+.nav{
+  width:55px;
+  height:55px;
+  border:0;
+  border-radius:13px;
+  color:#a9b7d3;
+  background:#182642;
+  cursor:pointer;
+  font-size:22px;
+  transition:.2s;
 }
-
-.leaflet-marker-icon {
-  pointer-events: auto;
+.nav small{
+  display:block;
+  font-size:9px;
+  margin-top:3px;
 }
-
-#libraryButton {
-  position: absolute;
-  z-index: 1000;
-  right: 20px;
-  bottom: 22px;
-  width: 66px;
-  height: 66px;
-  border-radius: 22px;
-  color: #2378db;
-  background: rgba(255,255,255,.96);
-  box-shadow: 0 5px 25px #153c6528;
-  font-size: 28px;
-  transition: transform .2s;
+.nav.active{
+  color:white;
+  background:linear-gradient(135deg,#258df5,#8055ed);
+  box-shadow:0 0 20px #398bff66;
+  transform:scale(1.04);
 }
-
-#libraryButton:active {
-  transform: scale(.9);
+#startScreen{
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:
+    radial-gradient(ellipse at 50% 35%,#183b71 0%,transparent 55%),
+    #070c18;
 }
-
-.playerIcon {
-  width: 24px;
-  height: 24px;
-  border: 4px solid white;
-  border-radius: 50%;
-  background: #2587ff;
-  box-shadow: 0 0 0 8px #2587ff30, 0 2px 8px #0003;
+.startCard{
+  width:min(420px,100%);
+  padding:35px 25px;
+  text-align:center;
+  border:1px solid #345a92;
+  border-radius:26px;
+  background:linear-gradient(145deg,#101d38,#0a1020);
+  box-shadow:0 0 70px #267eff22;
 }
-
-.questionMarker {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 17px;
-  color: white;
-  background: linear-gradient(145deg, #68c5ff, #2478ed);
-  border: 3px solid white;
-  box-shadow: 0 5px 18px #2378db55;
-  font-size: 28px;
-  font-weight: 900;
-  animation: questionFloat 1.8s ease-in-out infinite;
+.ghostLogo{
+  font-size:75px;
+  filter:drop-shadow(0 0 25px #539dff);
+  animation:float 3s infinite ease-in-out;
 }
-
-@keyframes questionFloat {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-5px) scale(1.05); }
+@keyframes float{
+  50%{transform:translateY(-12px)}
 }
-
-#libraryScreen,
-#rewardScreen {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  background: linear-gradient(145deg, #fafdff, #e5f2ff);
+.startCard h1{
+  font-size:34px;
+  letter-spacing:4px;
+  margin:12px 0 5px;
 }
-
-#libraryHeader {
-  height: 76px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
+.startCard h1 span{color:#55aaff}
+.startCard p{
+  color:#9aabc9;
+  line-height:1.6;
+  font-size:13px;
 }
-
-#libraryHeader button,
-#rewardBack {
-  width: 46px;
-  height: 46px;
-  border-radius: 15px;
-  color: #287be8;
-  background: white;
-  box-shadow: 0 3px 12px #17477c15;
-  font-size: 24px;
+.primary{
+  width:100%;
+  border:0;
+  padding:16px;
+  border-radius:13px;
+  margin-top:17px;
+  color:white;
+  font-weight:bold;
+  font-size:15px;
+  background:linear-gradient(100deg,#248df4,#8055ed);
+  cursor:pointer;
+  box-shadow:0 5px 25px #398bff44;
+  transition:.2s;
 }
-
-#collection {
-  height: calc(100% - 76px);
-  overflow-y: auto;
-  padding: 16px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
-  align-content: start;
-  gap: 15px;
+.primary:active{transform:scale(.96)}
+#panel{
+  display:none;
+  position:fixed;
+  z-index:550;
+  inset:0;
+  background:rgba(4,9,20,.72);
+  backdrop-filter:blur(7px);
+  align-items:center;
+  justify-content:center;
+  padding:18px;
 }
-
-.card {
-  aspect-ratio: 3 / 4.2;
-  border-radius: 17px;
-  overflow: hidden;
-  position: relative;
-  background: linear-gradient(145deg, #cce9ff, #76baff);
-  box-shadow: 0 5px 15px #245d941c;
-  animation: cardAppear .35s ease both;
+.window{
+  width:min(600px,100%);
+  max-height:85vh;
+  overflow:auto;
+  padding:22px;
+  background:linear-gradient(145deg,#111f3b,#0b1224);
+  border:1px solid #38547e;
+  border-radius:22px;
+  box-shadow:0 20px 70px #000b;
+  animation:appear .2s ease-out;
 }
-
-.card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+@keyframes appear{
+  from{opacity:0;transform:translateY(15px) scale(.97)}
+  to{opacity:1;transform:translateY(0) scale(1)}
 }
-
-.cardName {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 12px 7px;
-  color: white;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 800;
-  background: linear-gradient(transparent, #112b50dd);
+.windowHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:18px;
 }
-
-#rewardScreen {
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 25px;
+.windowHeader h2{margin:0;font-size:21px}
+.close{
+  width:35px;
+  height:35px;
+  border:0;
+  border-radius:10px;
+  background:#263858;
+  color:white;
+  font-size:20px;
+  cursor:pointer;
 }
-
-#rewardCard {
-  width: min(72vw, 300px);
-  aspect-ratio: 3 / 4.2;
-  border-radius: 24px;
-  overflow: hidden;
-  position: relative;
-  background: linear-gradient(145deg, #cce9ff, #76baff);
-  box-shadow: 0 18px 50px #1a5aa43b;
-  animation: rewardReveal .55s cubic-bezier(.2,.8,.2,1) both;
+#collectionGrid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
 }
-
-#rewardCard img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.card{
+  position:relative;
+  min-height:190px;
+  overflow:hidden;
+  border:1px solid #40577e;
+  border-radius:16px;
+  padding:13px;
+  background:linear-gradient(145deg,#1c3155,#111b32);
+  text-align:center;
+  cursor:pointer;
+  transition:.2s;
 }
-
-#rewardName {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 20px 8px;
-  color: white;
-  text-align: center;
-  font-weight: 900;
-  font-size: 22px;
-  background: linear-gradient(transparent, #112b50ed);
+.card:active{transform:scale(.96)}
+.cardArt{
+  font-size:65px;
+  margin:10px 0;
+  filter:drop-shadow(0 0 15px #68aaff);
 }
-
-#rewardBack {
-  width: auto;
-  min-width: 160px;
-  padding: 0 24px;
-  font-size: 16px;
-  font-weight: 800;
+.cardName{font-weight:bold;font-size:14px}
+.rarity{
+  display:inline-block;
+  margin-top:8px;
+  padding:5px 9px;
+  border-radius:20px;
+  font-size:10px;
+  font-weight:bold;
+  background:#263c5e;
 }
-
-@keyframes cardAppear {
-  from { opacity: 0; transform: translateY(10px) scale(.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+.common{color:#b8c4d8}
+.uncommon{color:#55e7ad}
+.rare{color:#53a9ff}
+.epic{color:#c08aff}
+.legendary{color:#ffd36c}
+.mythic{color:#ff789e}
+#empty{
+  grid-column:1/-1;
+  padding:45px 10px;
+  text-align:center;
+  color:#8292b0;
 }
-
-@keyframes rewardReveal {
-  from { opacity: 0; transform: scale(.65) rotate(-7deg); }
-  to { opacity: 1; transform: scale(1) rotate(0); }
+#ghostModal{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:1000;
+  background:#030817bb;
+  backdrop-filter:blur(8px);
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+.ghostWindow{
+  width:min(370px,100%);
+  padding:25px;
+  text-align:center;
+  border-radius:24px;
+  background:linear-gradient(150deg,#172b50,#0b1225);
+  border:1px solid #5682c0;
+  box-shadow:0 0 50px #438bff33;
+  animation:appear .2s;
+}
+.ghostArt{
+  font-size:100px;
+  margin:15px;
+  filter:drop-shadow(0 0 25px #5baaff);
+}
+.ghostWindow h2{margin:5px}
+.ghostWindow p{color:#a5b4d0;font-size:13px}
+#distanceText{color:#75bcff!important}
+#toast{
+  position:fixed;
+  z-index:3000;
+  bottom:105px;
+  left:50%;
+  transform:translateX(-50%) translateY(15px);
+  padding:12px 19px;
+  border:1px solid #496a9d;
+  border-radius:12px;
+  background:#101e39;
+  color:white;
+  font-size:12px;
+  opacity:0;
+  pointer-events:none;
+  transition:.25s;
+  white-space:nowrap;
+}
+#toast.show{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+.playerMarker{
+  width:19px;
+  height:19px;
+  border-radius:50%;
+  background:#36a2ff;
+  border:4px solid white;
+  box-shadow:0 0 0 8px #399bff33,0 0 25px #399bff;
+}
+.ghostMarker{
+  width:42px;
+  height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  background:radial-gradient(circle,#6d55c8,#182a55);
+  border:2px solid #a98cff;
+  box-shadow:0 0 18px #9766ff99;
+  font-size:23px;
+  animation:float 2.5s infinite ease-in-out;
+}
+@media(max-width:500px){
+  #topbar{top:10px;left:10px}
+  .window{padding:17px}
+  #menu{right:10px;bottom:12px}
 }
 </style>
 </head>
 
 <body>
+
+<div id="map"></div>
+
+<div id="topbar">
+  <div>
+    <div class="logo">👻 GHOST <span>HUNT</span></div>
+    <div id="gpsStatus">Standort nicht aktiviert</div>
+  </div>
+</div>
+
+<button id="locationButton" onclick="centerPlayer()">◎</button>
+
+<div id="menu">
+  <button class="nav active" id="mapNav" onclick="showPage('map')">
+    🗺️<small>Karte</small>
+  </button>
+  <button class="nav" id="collectionNav" onclick="showPage('collection')">
+    🃏<small>Sammlung</small>
+  </button>
+</div>
+
+<div id="panel" onclick="if(event.target===this)closePanel()">
+  <div class="window">
+    <div class="windowHeader">
+      <h2 id="panelTitle">Sammlung</h2>
+      <button class="close" onclick="closePanel()">×</button>
+    </div>
+    <div id="collectionGrid"></div>
+  </div>
+</div>
+
+<div id="ghostModal">
+  <div class="ghostWindow">
+    <div class="ghostArt" id="modalArt">👻</div>
+    <h2 id="modalName">Geist</h2>
+    <div class="rarity" id="modalRarity">Common</div>
+    <p id="modalDescription"></p>
+    <p id="distanceText"></p>
+    <button class="primary" id="collectButton" onclick="collectGhost()">
+      GEIST SAMMELN
+    </button>
+    <button class="close" style="width:100%;margin-top:10px"
+      onclick="closeGhost()">Schließen</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
 <div id="startScreen">
-  <button id="startButton">STARTEN</button>
-</div>
-
-<div id="game">
-  <div id="map"></div>
-  <button id="libraryButton" aria-label="Bibliothek öffnen">▤</button>
-</div>
-
-<div id="libraryScreen">
-  <div id="libraryHeader">
-    <button id="libraryBack" aria-label="Zurück">‹</button>
-    <strong>Bibliothek</strong>
-    <div style="width:46px"></div>
+  <div class="startCard">
+    <div class="ghostLogo">👻</div>
+    <h1>GHOST <span>HUNT</span></h1>
+    <p>Entdecke geheimnisvolle Geister auf der Weltkarte.<br>
+       Finde sie und vervollständige deine Sammlung!</p>
+    <button class="primary" onclick="startGame()">SPIEL STARTEN</button>
+    <p style="font-size:10px;margin-top:18px">
+      GPS wird nur während der Nutzung abgefragt.<br>
+      Bitte bleibe an sicheren, öffentlichen Orten.
+    </p>
   </div>
-  <div id="collection"></div>
-</div>
-
-<div id="rewardScreen">
-  <div id="rewardCard">
-    <img id="rewardImage" alt="">
-    <div id="rewardName"></div>
-  </div>
-  <button id="rewardBack">Weiter</button>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-const startScreen = document.getElementById("startScreen");
-const startButton = document.getElementById("startButton");
-const game = document.getElementById("game");
-const libraryButton = document.getElementById("libraryButton");
-const libraryScreen = document.getElementById("libraryScreen");
-const libraryBack = document.getElementById("libraryBack");
-const collection = document.getElementById("collection");
-const rewardScreen = document.getElementById("rewardScreen");
-const rewardBack = document.getElementById("rewardBack");
+/* ===================================
+   GHOST HUNT
+   =================================== */
 
+const COLLECTION_KEY = "ghosthunt_collection_v1";
+
+let cards = [];
 let map;
-let playerMarker;
-let accuracyCircle;
-let gpsWatch = null;
+let playerMarker = null;
 let playerPosition = null;
-let questionMarkers = [];
-let collected = new Set();
-let cardPool = [];
-let active = false;
-let lastSpawn = 0;
+let accuracyCircle = null;
+let ghosts = [];
+let selectedGhost = null;
+let watchId = null;
+let lastSpawnKey = "";
+let currentPage = "map";
 
-const playerIcon = L.divIcon({
-  className: "",
-  html: '<div class="playerIcon"></div>',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12]
-});
+const rarityNames = {
+  common:"Common",
+  uncommon:"Uncommon",
+  rare:"Rare",
+  epic:"Epic",
+  legendary:"Legendary",
+  mythic:"Mythic"
+};
 
-function createMap(lat, lon) {
-  map = L.map("map", {
-    zoomControl: false,
-    attributionControl: false,
-    dragging: false,
-    touchZoom: false,
-    doubleClickZoom: false,
-    scrollWheelZoom: false,
-    boxZoom: false,
-    keyboard: false,
-    tap: false,
-    zoomSnap: 0.5
-  }).setView([lat, lon], 18);
+const rarityClass = {
+  Common:"common",
+  Uncommon:"uncommon",
+  Rare:"rare",
+  Epic:"epic",
+  Legendary:"legendary",
+  Mythic:"mythic"
+};
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 20
-  }).addTo(map);
+const rarityColors = {
+  Common:"#b8c4d8",
+  Uncommon:"#55e7ad",
+  Rare:"#53a9ff",
+  Epic:"#c08aff",
+  Legendary:"#ffd36c",
+  Mythic:"#ff789e"
+};
 
-  playerMarker = L.marker([lat, lon], {
-    icon: playerIcon,
-    interactive: false,
-    keyboard: false
-  }).addTo(map);
-
-  accuracyCircle = L.circle([lat, lon], {
-    radius: 10,
-    color: "#2587ff",
-    weight: 1,
-    fillColor: "#2587ff",
-    fillOpacity: 0.1,
-    interactive: false
-  }).addTo(map);
-
-  map.on("drag", () => {
-    if (playerPosition) map.panTo(playerPosition, { animate: false });
-  });
-}
-
-async function loadCards() {
-  try {
-    const response = await fetch("cards.json", { cache: "no-store" });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
+function getCollection(){
+  try{
+    return JSON.parse(localStorage.getItem(COLLECTION_KEY)) || [];
+  }catch(e){
     return [];
   }
 }
 
-function startGame() {
-  if (!navigator.geolocation) return;
+function saveCollection(data){
+  localStorage.setItem(COLLECTION_KEY,JSON.stringify(data));
+}
 
-  startScreen.style.display = "none";
-  game.style.display = "block";
-  active = true;
+function toast(message){
+  const el=document.getElementById("toast");
+  el.textContent=message;
+  el.classList.add("show");
+  setTimeout(()=>el.classList.remove("show"),2500);
+}
 
-  if (map) {
-    map.invalidateSize();
+async function loadCards(){
+  try{
+    const response=await fetch("cards.json");
+    if(!response.ok) throw new Error("cards.json nicht gefunden");
+    const data=await response.json();
+    if(!Array.isArray(data)||data.length===0) throw new Error("Keine Karten");
+    cards=data;
+    document.getElementById("gpsStatus").textContent="Kartendaten geladen";
+  }catch(error){
+    toast("Fehler: cards.json konnte nicht geladen werden");
+    console.error(error);
+    cards=[];
   }
+}
+
+function initMap(){
+  map=L.map("map",{
+    zoomControl:false,
+    attributionControl:true
+  }).setView([20,0],3);
+
+  L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom:19,
+      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }
+  ).addTo(map);
+
+  L.control.zoom({position:"topright"}).addTo(map);
+}
+
+async function startGame(){
+  document.getElementById("startScreen").style.display="none";
+
+  if(!map) initMap();
+
+  await loadCards();
+
+  if(cards.length===0){
+    document.getElementById("gpsStatus").textContent="Kartendaten fehlen";
+    return;
+  }
+
+  if(!navigator.geolocation){
+    toast("GPS wird von diesem Browser nicht unterstützt");
+    return;
+  }
+
+  document.getElementById("gpsStatus").textContent="GPS wird angefragt...";
 
   navigator.geolocation.getCurrentPosition(
-    position => {
+    position=>{
       updatePosition(position);
-      if (!map) {
-        createMap(
-          position.coords.latitude,
-          position.coords.longitude
-        );
-      } else {
-        map.invalidateSize();
-        map.setView(playerPosition, 18, { animate: false });
-      }
-
-      if (gpsWatch === null) {
-        gpsWatch = navigator.geolocation.watchPosition(
-          updatePosition,
-          () => {},
-          {
-            enableHighAccuracy: true,
-            maximumAge: 1000,
-            timeout: 20000
-          }
-        );
-      }
+      startWatching();
+      toast("Standort erfolgreich aktiviert!");
     },
-    () => {
-      active = false;
-      startScreen.style.display = "flex";
-      game.style.display = "none";
+    error=>{
+      document.getElementById("gpsStatus").textContent="GPS nicht verfügbar";
+      toast("Standortfreigabe erforderlich");
+    },
+    {enableHighAccuracy:true,timeout:15000,maximumAge:0}
+  );
+}
+
+function startWatching(){
+  if(watchId!==null) return;
+
+  watchId=navigator.geolocation.watchPosition(
+    updatePosition,
+    error=>{
+      console.warn(error);
+      document.getElementById("gpsStatus").textContent="GPS-Signal verloren";
     },
     {
-      enableHighAccuracy: true,
-      maximumAge: 1000,
-      timeout: 20000
+      enableHighAccuracy:true,
+      maximumAge:3000,
+      timeout:15000
     }
   );
 }
 
-function updatePosition(position) {
-  if (!active) return;
+function updatePosition(position){
+  const lat=position.coords.latitude;
+  const lng=position.coords.longitude;
 
-  const lat = position.coords.latitude;
-  const lon = position.coords.longitude;
-  playerPosition = L.latLng(lat, lon);
+  playerPosition={
+    lat,
+    lng,
+    accuracy:position.coords.accuracy
+  };
 
-  if (!map) {
-    createMap(lat, lon);
-    return;
+  document.getElementById("gpsStatus").textContent=
+    "GPS aktiv · Genauigkeit ca. "+Math.round(position.coords.accuracy)+" m";
+
+  if(!playerMarker){
+    const icon=L.divIcon({
+      className:"",
+      html:'<div class="playerMarker"></div>',
+      iconSize:[19,19],
+      iconAnchor:[9,9]
+    });
+
+    playerMarker=L.marker([lat,lng],{
+      icon,
+      zIndexOffset:1000
+    }).addTo(map);
+
+    map.setView([lat,lng],17);
+  }else{
+    playerMarker.setLatLng([lat,lng]);
   }
 
-  playerMarker.setLatLng(playerPosition);
-  accuracyCircle.setLatLng(playerPosition);
-  accuracyCircle.setRadius(
-    Math.max(5, position.coords.accuracy || 10)
-  );
+  if(accuracyCircle){
+    map.removeLayer(accuracyCircle);
+  }
 
-  // Die Karte folgt der GPS-Position, ohne manuelle Steuerung.
-  map.setView(playerPosition, map.getZoom(), { animate: false });
-
-  maybeSpawnQuestion();
-  refreshQuestionDistances();
-}
-
-function distanceMeters(a, b) {
-  return map.distance(a, b);
-}
-
-function maybeSpawnQuestion() {
-  if (!playerPosition || !map || cardPool.length === 0) return;
-
-  const now = Date.now();
-
-  // Gelegentlich eine neue Frage in der näheren Umgebung.
-  if (now - lastSpawn < 45000) return;
-  if (questionMarkers.length >= 3) return;
-  if (Math.random() > 0.35) return;
-
-  lastSpawn = now;
-
-  const angle = Math.random() * Math.PI * 2;
-  const distance = 25 + Math.random() * 45;
-  const latOffset = (distance * Math.cos(angle)) / 111320;
-  const lonOffset =
-    (distance * Math.sin(angle)) /
-    (111320 * Math.cos(playerPosition.lat * Math.PI / 180));
-
-  const location = L.latLng(
-    playerPosition.lat + latOffset,
-    playerPosition.lng + lonOffset
-  );
-
-  const icon = L.divIcon({
-    className: "",
-    html: '<div class="questionMarker">?</div>',
-    iconSize: [48, 48],
-    iconAnchor: [24, 24]
-  });
-
-  const marker = L.marker(location, {
-    icon,
-    keyboard: false,
-    riseOnHover: true
+  accuracyCircle=L.circle([lat,lng],{
+    radius:Math.min(position.coords.accuracy,100),
+    color:"#399bff",
+    weight:1,
+    fillColor:"#399bff",
+    fillOpacity:.06
   }).addTo(map);
 
-  const item = { marker, location };
-  questionMarkers.push(item);
+  loadNearbyGhosts();
+}
 
-  marker.on("click", () => {
-    if (!playerPosition) return;
+/* Zufällige Kartenwahl nach Spawnchance */
+function weightedCard(){
+  const total=cards.reduce((sum,c)=>sum+Math.max(0,Number(c.spawnChance)||0),0);
+  if(total<=0) return cards[Math.floor(Math.random()*cards.length)];
 
-    if (distanceMeters(playerPosition, location) <= 20) {
-      collectQuestion(item);
-    }
+  let value=Math.random()*total;
+
+  for(const card of cards){
+    value-=Math.max(0,Number(card.spawnChance)||0);
+    if(value<=0) return card;
+  }
+
+  return cards[cards.length-1];
+}
+
+/*
+  Erste lokale Version:
+  Geister erscheinen in einem kleinen Bereich
+  um den aktuellen Standort.
+  Ihre Positionen werden hier lokal erzeugt.
+  Die spätere gemeinsame Weltverteilung benötigt
+  eine zentrale Datenquelle.
+*/
+function loadNearbyGhosts(){
+  if(!playerPosition || cards.length===0) return;
+
+  const key=
+    Math.round(playerPosition.lat*10000)+":"+
+    Math.round(playerPosition.lng*10000);
+
+  if(key===lastSpawnKey) return;
+  lastSpawnKey=key;
+
+  ghosts.forEach(g=>{
+    if(g.marker) map.removeLayer(g.marker);
   });
+  ghosts=[];
+
+  const count=5;
+
+  for(let i=0;i<count;i++){
+    const card=weightedCard();
+
+    // Kleine visuelle Streuung um den aktuellen Standort.
+    // Alle Begegnungen bleiben im 20-Meter-Radius.
+    const angle=Math.random()*Math.PI*2;
+    const distance=Math.random()*8;
+
+    const lat=playerPosition.lat+
+      Math.cos(angle)*distance/111320;
+
+    const lng=playerPosition.lng+
+      Math.sin(angle)*distance/
+      (111320*Math.max(.1,Math.cos(playerPosition.lat*Math.PI/180)));
+
+    const ghost={
+      instanceId:"ghost_"+Date.now()+"_"+i+"_"+Math.random(),
+      card,
+      lat,
+      lng,
+      collected:false,
+      marker:null
+    };
+
+    const icon=L.divIcon({
+      className:"",
+      html:'<div class="ghostMarker">👻</div>',
+      iconSize:[42,42],
+      iconAnchor:[21,21]
+    });
+
+    ghost.marker=L.marker([lat,lng],{icon}).addTo(map);
+
+    ghost.marker.on("click",()=>openGhost(ghost));
+
+    ghosts.push(ghost);
+  }
 }
 
-function refreshQuestionDistances() {
-  // Fragezeichen bleiben sichtbar; die Entfernung wird beim Antippen geprüft.
+function distanceMeters(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const rad=x=>x*Math.PI/180;
+
+  const dLat=rad(lat2-lat1);
+  const dLon=rad(lon2-lon1);
+
+  const a=
+    Math.sin(dLat/2)**2+
+    Math.cos(rad(lat1))*
+    Math.cos(rad(lat2))*
+    Math.sin(dLon/2)**2;
+
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-function collectQuestion(item) {
-  if (!playerPosition || distanceMeters(playerPosition, item.location) > 20) {
+function openGhost(ghost){
+  if(!playerPosition){
+    toast("Standort noch nicht verfügbar");
     return;
   }
 
-  map.removeLayer(item.marker);
-  questionMarkers = questionMarkers.filter(q => q !== item);
+  selectedGhost=ghost;
 
-  const available = cardPool.filter(card => {
-    const id = card.id || card.name;
-    return id && !collected.has(id);
+  const distance=distanceMeters(
+    playerPosition.lat,
+    playerPosition.lng,
+    ghost.lat,
+    ghost.lng
+  );
+
+  const already=getCollection().some(
+    item=>item.id===ghost.card.id
+  );
+
+  document.getElementById("modalArt").textContent=ghost.card.emoji||"👻";
+  document.getElementById("modalName").textContent=ghost.card.name;
+  document.getElementById("modalRarity").textContent=ghost.card.rarity;
+  document.getElementById("modalRarity").className=
+    "rarity "+(rarityClass[ghost.card.rarity]||"common");
+
+  document.getElementById("modalDescription").textContent=
+    ghost.card.description||"Ein geheimnisvoller Geist.";
+
+  document.getElementById("distanceText").textContent=
+    "Entfernung: "+Math.round(distance)+" Meter";
+
+  const button=document.getElementById("collectButton");
+
+  if(already){
+    button.textContent="BEREITS GESAMMELT";
+    button.disabled=true;
+    button.style.opacity=".5";
+  }else if(distance>20){
+    button.textContent="ZU WEIT ENTFERNT";
+    button.disabled=true;
+    button.style.opacity=".5";
+  }else{
+    button.textContent="GEIST SAMMELN";
+    button.disabled=false;
+    button.style.opacity="1";
+  }
+
+  document.getElementById("ghostModal").style.display="flex";
+}
+
+function closeGhost(){
+  document.getElementById("ghostModal").style.display="none";
+  selectedGhost=null;
+}
+
+function collectGhost(){
+  if(!selectedGhost||!playerPosition) return;
+
+  const distance=distanceMeters(
+    playerPosition.lat,
+    playerPosition.lng,
+    selectedGhost.lat,
+    selectedGhost.lng
+  );
+
+  if(distance>20){
+    toast("Du bist zu weit entfernt!");
+    closeGhost();
+    return;
+  }
+
+  const collection=getCollection();
+
+  if(collection.some(c=>c.id===selectedGhost.card.id)){
+    toast("Diesen Geist besitzt du bereits!");
+    closeGhost();
+    return;
+  }
+
+  collection.push({
+    id:selectedGhost.card.id,
+    collectedAt:new Date().toISOString()
   });
 
-  if (available.length === 0) return;
+  saveCollection(collection);
 
-  const card = available[Math.floor(Math.random() * available.length)];
-  const id = card.id || card.name;
-  collected.add(id);
+  if(selectedGhost.marker){
+    map.removeLayer(selectedGhost.marker);
+  }
 
-  document.getElementById("rewardImage").src = card.image || "";
-  document.getElementById("rewardImage").style.display =
-    card.image ? "block" : "none";
-  document.getElementById("rewardName").textContent = card.name || "";
-  rewardScreen.style.display = "flex";
-  rewardScreen.style.pointerEvents = "auto";
-  game.style.display = "none";
+  ghosts=ghosts.filter(g=>g!==selectedGhost);
+
+  const name=selectedGhost.card.name;
+  closeGhost();
+  toast("✨ "+name+" wurde gesammelt!");
 }
 
-function openLibrary() {
-  game.style.display = "none";
-  libraryScreen.style.display = "block";
-  renderCollection();
-}
+/* Navigation */
+function showPage(page){
+  currentPage=page;
 
-function renderCollection() {
-  collection.innerHTML = "";
+  document.getElementById("mapNav").classList.toggle("active",page==="map");
+  document.getElementById("collectionNav").classList.toggle("active",page==="collection");
 
-  cardPool
-    .filter(card => collected.has(card.id || card.name))
-    .forEach(card => {
-      const element = document.createElement("div");
-      element.className = "card";
-
-      if (card.image) {
-        const image = document.createElement("img");
-        image.src = card.image;
-        image.alt = "";
-        element.appendChild(image);
-      }
-
-      const name = document.createElement("div");
-      name.className = "cardName";
-      name.textContent = card.name || "";
-      element.appendChild(name);
-
-      collection.appendChild(element);
-    });
-}
-
-function returnToMap() {
-  rewardScreen.style.display = "none";
-  libraryScreen.style.display = "none";
-  game.style.display = "block";
-
-  if (map) {
-    map.invalidateSize();
-    if (playerPosition) {
-      map.setView(playerPosition, map.getZoom(), { animate: false });
-    }
+  if(page==="collection"){
+    renderCollection();
+    document.getElementById("panelTitle").textContent="Deine Sammlung";
+    document.getElementById("panel").style.display="flex";
+  }else{
+    closePanel();
+    setTimeout(()=>{if(map)map.invalidateSize()},100);
   }
 }
 
-startButton.addEventListener("click", startGame);
-libraryButton.addEventListener("click", openLibrary);
-libraryBack.addEventListener("click", returnToMap);
-rewardBack.addEventListener("click", returnToMap);
+function closePanel(){
+  document.getElementById("panel").style.display="none";
+  currentPage="map";
+  document.getElementById("mapNav").classList.add("active");
+  document.getElementById("collectionNav").classList.remove("active");
+}
 
-loadCards().then(cards => {
-  cardPool = cards;
+function renderCollection(){
+  const grid=document.getElementById("collectionGrid");
+  const collection=getCollection();
+
+  grid.innerHTML="";
+
+  if(collection.length===0){
+    grid.innerHTML=`
+      <div id="empty">
+        <div style="font-size:55px">👻</div>
+        <h3>Noch keine Geister!</h3>
+        <p>Entdecke Geister auf der Karte und sammle sie.</p>
+      </div>`;
+    return;
+  }
+
+  collection.forEach(item=>{
+    const card=cards.find(c=>c.id===item.id);
+    if(!card)return;
+
+    const div=document.createElement("div");
+    div.className="card";
+
+    const art=document.createElement("div");
+    art.className="cardArt";
+    art.textContent=card.emoji||"👻";
+
+    const name=document.createElement("div");
+    name.className="cardName";
+    name.textContent=card.name;
+
+    const rarity=document.createElement("div");
+    rarity.className="rarity "+(rarityClass[card.rarity]||"common");
+    rarity.textContent=card.rarity;
+
+    div.append(art,name,rarity);
+    grid.appendChild(div);
+  });
+}
+
+function centerPlayer(){
+  if(!playerPosition){
+    toast("Noch kein GPS-Standort verfügbar");
+    return;
+  }
+
+  map.setView(
+    [playerPosition.lat,playerPosition.lng],
+    18,
+    {animate:true}
+  );
+}
+
+window.addEventListener("beforeunload",()=>{
+  if(watchId!==null){
+    navigator.geolocation.clearWatch(watchId);
+  }
 });
 </script>
+
 </body>
 </html>

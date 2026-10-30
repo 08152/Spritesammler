@@ -4,334 +4,196 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>GHOST HUNT</title>
-
+<title>WRAITHS — Ghost Collection</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
 *{box-sizing:border-box}
 :root{
-  --bg:#080d19;
-  --panel:rgba(12,21,42,.94);
-  --blue:#399bff;
-  --purple:#9c65ff;
-  --text:#f3f6ff;
-  --muted:#8795b3;
+ --bg:#080d18;--panel:#101a2c;--blue:#45a5ff;
+ --purple:#9561ff;--muted:#8795ae;--white:#f5f7ff;
 }
-body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:Arial,sans-serif;
-  overflow:hidden;
-}
-#map{
-  position:fixed;
-  inset:0;
-  background:#101b2d;
-  z-index:1;
-}
-.leaflet-tile{
-  filter:brightness(.72) saturate(.75) hue-rotate(8deg);
-}
-.leaflet-control-attribution{
-  font-size:9px!important;
-}
+body{margin:0;background:var(--bg);color:var(--white);font-family:Arial,sans-serif;overflow:hidden}
+#map{position:fixed;inset:0;background:#101b2b;z-index:1}
+.leaflet-tile{filter:brightness(.70) saturate(.7) hue-rotate(8deg)}
+.leaflet-control-attribution{font-size:9px!important}
+.leaflet-bar a{background:#15233b!important;color:white!important;border-color:#34496b!important}
 #topbar{
-  position:fixed;
-  z-index:500;
-  top:15px;
-  left:15px;
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:12px 16px;
-  border:1px solid #344a70;
-  background:rgba(9,17,35,.91);
-  border-radius:15px;
-  box-shadow:0 5px 25px #0008;
-  backdrop-filter:blur(12px);
+ position:fixed;z-index:500;top:15px;left:15px;
+ display:flex;align-items:center;gap:14px;padding:12px 17px;
+ background:#0b1425ed;border:1px solid #34496c;
+ border-radius:15px;backdrop-filter:blur(15px);
+ box-shadow:0 8px 30px #0007
 }
-.logo{
-  font-size:17px;
-  font-weight:900;
-  letter-spacing:2px;
-}
-.logo span{color:#55aaff}
-#gpsStatus{
-  font-size:11px;
-  color:#8fa4c7;
-  margin-top:4px;
-}
+.brand{font-size:19px;font-weight:1000;letter-spacing:3px}
+.brand span{color:#62aaff}
+.subtitle{font-size:10px;color:#8195b7;margin-top:4px;letter-spacing:1px}
+#gpsStatus{font-size:10px;color:#8ea9cc;margin-top:5px}
 #locationButton{
-  position:fixed;
-  z-index:500;
-  bottom:105px;
-  left:15px;
-  width:48px;
-  height:48px;
-  border:1px solid #344c75;
-  border-radius:15px;
-  background:var(--panel);
-  color:white;
-  font-size:21px;
-  cursor:pointer;
+ position:fixed;z-index:500;bottom:105px;left:15px;
+ width:48px;height:48px;border-radius:14px;
+ background:#101d34;border:1px solid #3d5b87;color:white;
+ font-size:22px;cursor:pointer
 }
 #menu{
-  position:fixed;
-  z-index:600;
-  right:14px;
-  bottom:18px;
-  display:flex;
-  flex-direction:column;
-  gap:9px;
-  padding:9px;
-  background:rgba(9,17,35,.94);
-  border:1px solid #34466b;
-  border-radius:19px;
-  backdrop-filter:blur(15px);
-  box-shadow:0 8px 35px #0008;
+ position:fixed;z-index:600;right:14px;bottom:15px;
+ display:flex;flex-direction:column;gap:8px;padding:9px;
+ border:1px solid #34496c;border-radius:18px;
+ background:#0b1425ed;backdrop-filter:blur(15px);
+ box-shadow:0 10px 35px #0008
 }
 .nav{
-  width:55px;
-  height:55px;
-  border:0;
-  border-radius:13px;
-  color:#a9b7d3;
-  background:#182642;
-  cursor:pointer;
-  font-size:22px;
-  transition:.2s;
+ width:58px;height:56px;border:0;border-radius:12px;
+ background:#182640;color:#9aaac6;cursor:pointer;
+ font-size:21px;transition:.2s
 }
-.nav small{
-  display:block;
-  font-size:9px;
-  margin-top:3px;
-}
+.nav small{display:block;font-size:9px;margin-top:4px}
 .nav.active{
-  color:white;
-  background:linear-gradient(135deg,#258df5,#8055ed);
-  box-shadow:0 0 20px #398bff66;
-  transform:scale(1.04);
+ background:linear-gradient(135deg,#278fe9,#8053e9);
+ color:white;box-shadow:0 0 20px #4d9fff66
 }
+button{font-family:inherit}
+button:active{transform:scale(.95)}
 #startScreen{
-  position:fixed;
-  inset:0;
-  z-index:2000;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:20px;
-  background:
-    radial-gradient(ellipse at 50% 35%,#183b71 0%,transparent 55%),
-    #070c18;
+ position:fixed;inset:0;z-index:2000;
+ display:flex;align-items:center;justify-content:center;padding:20px;
+ background:radial-gradient(ellipse at 50% 35%,#1b3c70,#080d18 70%)
 }
 .startCard{
-  width:min(420px,100%);
-  padding:35px 25px;
-  text-align:center;
-  border:1px solid #345a92;
-  border-radius:26px;
-  background:linear-gradient(145deg,#101d38,#0a1020);
-  box-shadow:0 0 70px #267eff22;
+ width:min(420px,100%);padding:35px 25px;text-align:center;
+ background:linear-gradient(145deg,#142441,#0b1221);
+ border:1px solid #42618d;border-radius:25px;
+ box-shadow:0 0 75px #2879d933
 }
-.ghostLogo{
-  font-size:75px;
-  filter:drop-shadow(0 0 25px #539dff);
-  animation:float 3s infinite ease-in-out;
-}
-@keyframes float{
-  50%{transform:translateY(-12px)}
-}
-.startCard h1{
-  font-size:34px;
-  letter-spacing:4px;
-  margin:12px 0 5px;
-}
-.startCard h1 span{color:#55aaff}
-.startCard p{
-  color:#9aabc9;
-  line-height:1.6;
-  font-size:13px;
-}
+.logoArt{width:125px;height:125px;margin:auto;filter:drop-shadow(0 0 24px #529dff);animation:float 3s infinite ease-in-out}
+@keyframes float{50%{transform:translateY(-10px)}}
+.startCard h1{font-size:35px;letter-spacing:5px;margin:18px 0 5px}
+.startCard h1 span{color:#60aaff}
+.startCard p{font-size:13px;line-height:1.7;color:#a0b0ca}
 .primary{
-  width:100%;
-  border:0;
-  padding:16px;
-  border-radius:13px;
-  margin-top:17px;
-  color:white;
-  font-weight:bold;
-  font-size:15px;
-  background:linear-gradient(100deg,#248df4,#8055ed);
-  cursor:pointer;
-  box-shadow:0 5px 25px #398bff44;
-  transition:.2s;
+ border:0;border-radius:12px;padding:15px 18px;
+ width:100%;color:white;font-size:13px;font-weight:900;
+ letter-spacing:1px;cursor:pointer;
+ background:linear-gradient(100deg,#248eea,#8655ef);
+ box-shadow:0 5px 22px #478aff44;transition:.2s
 }
-.primary:active{transform:scale(.96)}
+.primary:disabled{opacity:.45;cursor:not-allowed}
 #panel{
-  display:none;
-  position:fixed;
-  z-index:550;
-  inset:0;
-  background:rgba(4,9,20,.72);
-  backdrop-filter:blur(7px);
-  align-items:center;
-  justify-content:center;
-  padding:18px;
+ display:none;position:fixed;inset:0;z-index:550;
+ background:#050a16c9;backdrop-filter:blur(9px);
+ align-items:center;justify-content:center;padding:15px
 }
 .window{
-  width:min(600px,100%);
-  max-height:85vh;
-  overflow:auto;
-  padding:22px;
-  background:linear-gradient(145deg,#111f3b,#0b1224);
-  border:1px solid #38547e;
-  border-radius:22px;
-  box-shadow:0 20px 70px #000b;
-  animation:appear .2s ease-out;
+ width:min(850px,100%);max-height:88vh;overflow:auto;
+ padding:23px;border-radius:22px;
+ background:linear-gradient(145deg,#14213b,#0a1222);
+ border:1px solid #344f79;box-shadow:0 25px 90px #000b;
+ animation:appear .22s ease
 }
-@keyframes appear{
-  from{opacity:0;transform:translateY(15px) scale(.97)}
-  to{opacity:1;transform:translateY(0) scale(1)}
-}
-.windowHeader{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:18px;
-}
-.windowHeader h2{margin:0;font-size:21px}
+@keyframes appear{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:none}}
+.windowHeader{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.windowHeader h2{margin:0;font-size:22px;letter-spacing:1px}
 .close{
-  width:35px;
-  height:35px;
-  border:0;
-  border-radius:10px;
-  background:#263858;
-  color:white;
-  font-size:20px;
-  cursor:pointer;
+ width:36px;height:36px;border:0;border-radius:10px;
+ background:#253653;color:white;font-size:21px;cursor:pointer
 }
+.collectionInfo{color:#91a5c6;font-size:12px;margin-bottom:17px}
 #collectionGrid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:12px;
+ display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:17px
 }
-.card{
-  position:relative;
-  min-height:190px;
-  overflow:hidden;
-  border:1px solid #40577e;
-  border-radius:16px;
-  padding:13px;
-  background:linear-gradient(145deg,#1c3155,#111b32);
-  text-align:center;
-  cursor:pointer;
-  transition:.2s;
+
+/* TRADING CARDS */
+.tradingCard{
+ position:relative;overflow:hidden;aspect-ratio:2/3;
+ padding:7px;border-radius:14px;cursor:pointer;
+ background:linear-gradient(145deg,#9daec6,#34435f 30%,#131e35);
+ box-shadow:0 9px 22px #0008;transition:.25s
 }
-.card:active{transform:scale(.96)}
-.cardArt{
-  font-size:65px;
-  margin:10px 0;
-  filter:drop-shadow(0 0 15px #68aaff);
+.tradingCard:hover{transform:translateY(-7px) scale(1.025);box-shadow:0 14px 30px #0009}
+.card-inner{
+ height:100%;padding:9px;border-radius:9px;
+ background:linear-gradient(155deg,#172b49,#0a1427);
+ display:flex;flex-direction:column;position:relative;overflow:hidden
 }
-.cardName{font-weight:bold;font-size:14px}
-.rarity{
-  display:inline-block;
-  margin-top:8px;
-  padding:5px 9px;
-  border-radius:20px;
-  font-size:10px;
-  font-weight:bold;
-  background:#263c5e;
+.card-top{display:flex;align-items:center;justify-content:space-between;gap:5px}
+.card-title{font-size:12px;font-weight:900;letter-spacing:.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-rarity{font-size:8px;font-weight:bold;letter-spacing:.7px;text-transform:uppercase}
+.card-art{
+ position:relative;flex:1;min-height:90px;margin:9px 0;
+ border-radius:8px;overflow:hidden;
+ background:radial-gradient(ellipse at 50% 48%,var(--glow),#10182d 70%);
+ border:1px solid #ffffff20
 }
-.common{color:#b8c4d8}
-.uncommon{color:#55e7ad}
-.rare{color:#53a9ff}
-.epic{color:#c08aff}
-.legendary{color:#ffd36c}
-.mythic{color:#ff789e}
-#empty{
-  grid-column:1/-1;
-  padding:45px 10px;
-  text-align:center;
-  color:#8292b0;
+.card-art img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.card-art svg{width:100%;height:100%;position:absolute;inset:0}
+.card-bottom{
+ padding:7px 4px 3px;border-top:1px solid #ffffff26;
+ font-size:9px;color:#a8bad5;line-height:1.5
 }
+.card-bottom strong{color:white}
+.card-number{font-size:8px;color:#8ea6c9;margin-top:4px}
+.card-shine{
+ pointer-events:none;position:absolute;inset:-100%;
+ background:linear-gradient(115deg,transparent 40%,#ffffff25 48%,transparent 55%);
+ transform:translateX(-100%);transition:.6s
+}
+.tradingCard:hover .card-shine{transform:translateX(100%)}
+.rarity-common{--glow:#728da9;background:linear-gradient(145deg,#8798ad,#273a53 50%,#101a2d)}
+.rarity-uncommon{--glow:#24aa82;background:linear-gradient(145deg,#65e7b0,#147c67 40%,#102b2a)}
+.rarity-rare{--glow:#2589e8;background:linear-gradient(145deg,#73caff,#1764bd 40%,#14264a)}
+.rarity-epic{--glow:#994cff;background:linear-gradient(145deg,#c89aff,#7435bd 40%,#271442)}
+.rarity-legendary{--glow:#db9c2d;background:linear-gradient(145deg,#ffe28a,#bd7b1e 40%,#463018)}
+.rarity-mythic{--glow:#ec478b;background:linear-gradient(145deg,#ff9bcb,#b52e75 40%,#48152e)}
+#empty{grid-column:1/-1;text-align:center;padding:50px 10px;color:#91a4c1}
+#empty svg{width:75px;height:75px;opacity:.5}
 #ghostModal{
-  display:none;
-  position:fixed;
-  inset:0;
-  z-index:1000;
-  background:#030817bb;
-  backdrop-filter:blur(8px);
-  align-items:center;
-  justify-content:center;
-  padding:20px;
+ display:none;position:fixed;inset:0;z-index:1000;
+ align-items:center;justify-content:center;padding:15px;
+ background:#020716cc;backdrop-filter:blur(9px)
 }
 .ghostWindow{
-  width:min(370px,100%);
-  padding:25px;
-  text-align:center;
-  border-radius:24px;
-  background:linear-gradient(150deg,#172b50,#0b1225);
-  border:1px solid #5682c0;
-  box-shadow:0 0 50px #438bff33;
-  animation:appear .2s;
+ width:min(410px,100%);padding:20px;
+ border-radius:22px;border:1px solid #45699c;
+ background:linear-gradient(145deg,#172744,#0a1223);
+ box-shadow:0 0 60px #398aff33;animation:appear .2s
 }
-.ghostArt{
-  font-size:100px;
-  margin:15px;
-  filter:drop-shadow(0 0 25px #5baaff);
-}
-.ghostWindow h2{margin:5px}
-.ghostWindow p{color:#a5b4d0;font-size:13px}
-#distanceText{color:#75bcff!important}
+#previewCard{width:185px;max-width:60%;margin:0 auto 15px;pointer-events:none}
+#previewCard .tradingCard{width:100%}
+.ghostWindow h2{text-align:center;margin:7px 0}
+.ghostWindow p{text-align:center;color:#9eb0ce;font-size:12px;line-height:1.6}
+#distanceText{color:#66b5ff!important;font-weight:bold}
 #toast{
-  position:fixed;
-  z-index:3000;
-  bottom:105px;
-  left:50%;
-  transform:translateX(-50%) translateY(15px);
-  padding:12px 19px;
-  border:1px solid #496a9d;
-  border-radius:12px;
-  background:#101e39;
-  color:white;
-  font-size:12px;
-  opacity:0;
-  pointer-events:none;
-  transition:.25s;
-  white-space:nowrap;
+ position:fixed;z-index:3000;bottom:105px;left:50%;
+ transform:translate(-50%,15px);padding:12px 18px;
+ border:1px solid #496a9d;border-radius:12px;
+ background:#12213b;color:white;font-size:12px;
+ opacity:0;pointer-events:none;transition:.25s;white-space:nowrap
 }
-#toast.show{
-  opacity:1;
-  transform:translateX(-50%) translateY(0);
-}
+#toast.show{opacity:1;transform:translate(-50%,0)}
 .playerMarker{
-  width:19px;
-  height:19px;
-  border-radius:50%;
-  background:#36a2ff;
-  border:4px solid white;
-  box-shadow:0 0 0 8px #399bff33,0 0 25px #399bff;
+ width:18px;height:18px;border:4px solid white;border-radius:50%;
+ background:#329cff;box-shadow:0 0 0 8px #329cff30,0 0 25px #329cff
 }
 .ghostMarker{
-  width:42px;
-  height:42px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:50%;
-  background:radial-gradient(circle,#6d55c8,#182a55);
-  border:2px solid #a98cff;
-  box-shadow:0 0 18px #9766ff99;
-  font-size:23px;
-  animation:float 2.5s infinite ease-in-out;
+ width:42px;height:42px;border-radius:50%;padding:4px;
+ background:radial-gradient(circle,#704bce,#172546);
+ border:1px solid #b18aff;box-shadow:0 0 18px #9665ff99;
+ animation:float 3s infinite
+}
+.ghostMarker svg{width:100%;height:100%}
+#mapHint{
+ position:fixed;z-index:400;bottom:19px;left:50%;
+ transform:translateX(-50%);padding:9px 13px;
+ background:#101a2bdd;border:1px solid #34496b;
+ border-radius:20px;color:#a5b9d9;font-size:10px;
+ white-space:nowrap;pointer-events:none
 }
 @media(max-width:500px){
-  #topbar{top:10px;left:10px}
-  .window{padding:17px}
-  #menu{right:10px;bottom:12px}
+ #topbar{top:10px;left:10px;padding:10px 13px}
+ .brand{font-size:16px}
+ #menu{right:10px;bottom:12px}
+ .window{padding:15px}
+ #collectionGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
 }
 </style>
 </head>
@@ -341,533 +203,431 @@ body{
 <div id="map"></div>
 
 <div id="topbar">
-  <div>
-    <div class="logo">👻 GHOST <span>HUNT</span></div>
-    <div id="gpsStatus">Standort nicht aktiviert</div>
-  </div>
+ <div>
+  <div class="brand">WRAITHS <span>COLLECTION</span></div>
+  <div class="subtitle">GLOBAL GHOST EXPLORATION</div>
+  <div id="gpsStatus">LOCATION NOT CONNECTED</div>
+ </div>
 </div>
 
-<button id="locationButton" onclick="centerPlayer()">◎</button>
+<button id="locationButton" onclick="centerPlayer()" title="Mein Standort">◎</button>
+
+<div id="mapHint">GEISTER ENTDECKEN · 20 M SAMMELRADIUS</div>
 
 <div id="menu">
-  <button class="nav active" id="mapNav" onclick="showPage('map')">
-    🗺️<small>Karte</small>
-  </button>
-  <button class="nav" id="collectionNav" onclick="showPage('collection')">
-    🃏<small>Sammlung</small>
-  </button>
+ <button class="nav active" id="mapNav" onclick="showPage('map')">⌖<small>KARTE</small></button>
+ <button class="nav" id="collectionNav" onclick="showPage('collection')">▤<small>SAMMLUNG</small></button>
 </div>
 
 <div id="panel" onclick="if(event.target===this)closePanel()">
-  <div class="window">
-    <div class="windowHeader">
-      <h2 id="panelTitle">Sammlung</h2>
-      <button class="close" onclick="closePanel()">×</button>
-    </div>
-    <div id="collectionGrid"></div>
+ <div class="window">
+  <div class="windowHeader">
+   <h2>DEINE SAMMLUNG</h2>
+   <button class="close" onclick="closePanel()">×</button>
   </div>
+  <div class="collectionInfo" id="collectionInfo">0 GEISTER GESAMMELT</div>
+  <div id="collectionGrid"></div>
+ </div>
 </div>
 
 <div id="ghostModal">
-  <div class="ghostWindow">
-    <div class="ghostArt" id="modalArt">👻</div>
-    <h2 id="modalName">Geist</h2>
-    <div class="rarity" id="modalRarity">Common</div>
-    <p id="modalDescription"></p>
-    <p id="distanceText"></p>
-    <button class="primary" id="collectButton" onclick="collectGhost()">
-      GEIST SAMMELN
-    </button>
-    <button class="close" style="width:100%;margin-top:10px"
-      onclick="closeGhost()">Schließen</button>
-  </div>
+ <div class="ghostWindow">
+  <div id="previewCard"></div>
+  <h2 id="modalName">Ghost</h2>
+  <p id="modalDescription"></p>
+  <p id="distanceText"></p>
+  <button class="primary" id="collectButton" onclick="collectGhost()">GEIST SAMMELN</button>
+  <button class="close" style="width:100%;margin-top:10px" onclick="closeGhost()">SCHLIESSEN</button>
+ </div>
 </div>
 
 <div id="toast"></div>
 
 <div id="startScreen">
-  <div class="startCard">
-    <div class="ghostLogo">👻</div>
-    <h1>GHOST <span>HUNT</span></h1>
-    <p>Entdecke geheimnisvolle Geister auf der Weltkarte.<br>
-       Finde sie und vervollständige deine Sammlung!</p>
-    <button class="primary" onclick="startGame()">SPIEL STARTEN</button>
-    <p style="font-size:10px;margin-top:18px">
-      GPS wird nur während der Nutzung abgefragt.<br>
-      Bitte bleibe an sicheren, öffentlichen Orten.
-    </p>
-  </div>
+ <div class="startCard">
+  <svg class="logoArt" viewBox="0 0 120 120">
+   <defs>
+    <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+     <stop stop-color="#a6e7ff"/><stop offset="1" stop-color="#6560ff"/>
+    </linearGradient>
+   </defs>
+   <path d="M20 91V51C20 25 37 12 60 12S100 25 100 51V91L83 81L69 95L54 82L38 96Z" fill="url(#logoGrad)" stroke="#d9edff" stroke-width="2"/>
+   <ellipse cx="44" cy="54" rx="5" ry="8" fill="#17274c"/>
+   <ellipse cx="76" cy="54" rx="5" ry="8" fill="#17274c"/>
+   <path d="M52 69Q60 76 68 69" fill="none" stroke="#17274c" stroke-width="3" stroke-linecap="round"/>
+  </svg>
+  <h1>WRAITHS <span>COLLECTION</span></h1>
+  <p>Explore the world.<br>Discover mysterious creatures.<br>Build your ultimate collection.</p>
+  <button class="primary" onclick="startGame()">START EXPLORING</button>
+  <p style="font-size:10px;margin-top:18px">GPS ACCESS REQUIRED · SAFE LOCATIONS ONLY</p>
+ </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
-/* ===================================
-   GHOST HUNT
-   =================================== */
+const COLLECTION_KEY="wraiths_collection_v1";
+const WORLD_SEED=73921;
+const CELL=0.002;
 
-const COLLECTION_KEY = "ghosthunt_collection_v1";
-
-let cards = [];
-let map;
-let playerMarker = null;
-let playerPosition = null;
-let accuracyCircle = null;
-let ghosts = [];
-let selectedGhost = null;
-let watchId = null;
-let lastSpawnKey = "";
-let currentPage = "map";
-
-const rarityNames = {
-  common:"Common",
-  uncommon:"Uncommon",
-  rare:"Rare",
-  epic:"Epic",
-  legendary:"Legendary",
-  mythic:"Mythic"
-};
-
-const rarityClass = {
-  Common:"common",
-  Uncommon:"uncommon",
-  Rare:"rare",
-  Epic:"epic",
-  Legendary:"legendary",
-  Mythic:"mythic"
-};
-
-const rarityColors = {
-  Common:"#b8c4d8",
-  Uncommon:"#55e7ad",
-  Rare:"#53a9ff",
-  Epic:"#c08aff",
-  Legendary:"#ffd36c",
-  Mythic:"#ff789e"
-};
-
-function getCollection(){
-  try{
-    return JSON.parse(localStorage.getItem(COLLECTION_KEY)) || [];
-  }catch(e){
-    return [];
-  }
-}
-
-function saveCollection(data){
-  localStorage.setItem(COLLECTION_KEY,JSON.stringify(data));
-}
+let cards=[],map,playerPosition=null,playerMarker=null;
+let accuracyCircle=null,watchId=null,ghosts=[];
+let selectedGhost=null,spawnsReady=false;
 
 function toast(message){
-  const el=document.getElementById("toast");
-  el.textContent=message;
-  el.classList.add("show");
-  setTimeout(()=>el.classList.remove("show"),2500);
+ const el=document.getElementById("toast");
+ el.textContent=message;el.classList.add("show");
+ setTimeout(()=>el.classList.remove("show"),2500);
+}
+
+function getCollection(){
+ try{return JSON.parse(localStorage.getItem(COLLECTION_KEY))||[]}
+ catch(e){return []}
+}
+function saveCollection(c){
+ localStorage.setItem(COLLECTION_KEY,JSON.stringify(c));
 }
 
 async function loadCards(){
-  try{
-    const response=await fetch("cards.json");
-    if(!response.ok) throw new Error("cards.json nicht gefunden");
-    const data=await response.json();
-    if(!Array.isArray(data)||data.length===0) throw new Error("Keine Karten");
-    cards=data;
-    document.getElementById("gpsStatus").textContent="Kartendaten geladen";
-  }catch(error){
-    toast("Fehler: cards.json konnte nicht geladen werden");
-    console.error(error);
-    cards=[];
-  }
+ const response=await fetch("cards.json");
+ if(!response.ok)throw new Error("cards.json nicht gefunden");
+ cards=await response.json();
+ if(!Array.isArray(cards)||!cards.length)throw new Error("Keine Karten gefunden");
 }
 
 function initMap(){
-  map=L.map("map",{
-    zoomControl:false,
-    attributionControl:true
-  }).setView([20,0],3);
-
-  L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    {
-      maxZoom:19,
-      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }
-  ).addTo(map);
-
-  L.control.zoom({position:"topright"}).addTo(map);
+ map=L.map("map",{zoomControl:false}).setView([20,0],3);
+ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  maxZoom:19,
+  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+ }).addTo(map);
+ L.control.zoom({position:"topright"}).addTo(map);
+ map.on("moveend",loadVisibleGhosts);
 }
 
 async function startGame(){
-  document.getElementById("startScreen").style.display="none";
+ document.getElementById("startScreen").style.display="none";
+ if(!map)initMap();
 
-  if(!map) initMap();
+ try{await loadCards()}
+ catch(e){toast("Fehler beim Laden von cards.json");console.error(e);return}
 
-  await loadCards();
+ if(!navigator.geolocation){
+  toast("GPS wird nicht unterstützt");return;
+ }
 
-  if(cards.length===0){
-    document.getElementById("gpsStatus").textContent="Kartendaten fehlen";
-    return;
-  }
+ document.getElementById("gpsStatus").textContent="WAITING FOR LOCATION...";
 
-  if(!navigator.geolocation){
-    toast("GPS wird von diesem Browser nicht unterstützt");
-    return;
-  }
-
-  document.getElementById("gpsStatus").textContent="GPS wird angefragt...";
-
-  navigator.geolocation.getCurrentPosition(
-    position=>{
-      updatePosition(position);
-      startWatching();
-      toast("Standort erfolgreich aktiviert!");
-    },
-    error=>{
-      document.getElementById("gpsStatus").textContent="GPS nicht verfügbar";
-      toast("Standortfreigabe erforderlich");
-    },
-    {enableHighAccuracy:true,timeout:15000,maximumAge:0}
-  );
+ navigator.geolocation.getCurrentPosition(
+  p=>{
+   updatePosition(p);
+   watchId=navigator.geolocation.watchPosition(updatePosition,e=>{
+    document.getElementById("gpsStatus").textContent="GPS SIGNAL LOST";
+   },{enableHighAccuracy:true,maximumAge:2000,timeout:15000});
+   toast("LOCATION CONNECTED");
+  },
+  e=>toast("Bitte erlaube den Standortzugriff"),
+  {enableHighAccuracy:true,timeout:15000,maximumAge:0}
+ );
 }
 
-function startWatching(){
-  if(watchId!==null) return;
+function updatePosition(p){
+ playerPosition={
+  lat:p.coords.latitude,lng:p.coords.longitude,
+  accuracy:p.coords.accuracy
+ };
 
-  watchId=navigator.geolocation.watchPosition(
-    updatePosition,
-    error=>{
-      console.warn(error);
-      document.getElementById("gpsStatus").textContent="GPS-Signal verloren";
-    },
-    {
-      enableHighAccuracy:true,
-      maximumAge:3000,
-      timeout:15000
-    }
-  );
-}
+ document.getElementById("gpsStatus").textContent=
+  "GPS CONNECTED · ±"+Math.round(p.coords.accuracy)+" M";
 
-function updatePosition(position){
-  const lat=position.coords.latitude;
-  const lng=position.coords.longitude;
+ const pos=[playerPosition.lat,playerPosition.lng];
 
-  playerPosition={
-    lat,
-    lng,
-    accuracy:position.coords.accuracy
-  };
-
-  document.getElementById("gpsStatus").textContent=
-    "GPS aktiv · Genauigkeit ca. "+Math.round(position.coords.accuracy)+" m";
-
-  if(!playerMarker){
-    const icon=L.divIcon({
-      className:"",
-      html:'<div class="playerMarker"></div>',
-      iconSize:[19,19],
-      iconAnchor:[9,9]
-    });
-
-    playerMarker=L.marker([lat,lng],{
-      icon,
-      zIndexOffset:1000
-    }).addTo(map);
-
-    map.setView([lat,lng],17);
-  }else{
-    playerMarker.setLatLng([lat,lng]);
-  }
-
-  if(accuracyCircle){
-    map.removeLayer(accuracyCircle);
-  }
-
-  accuracyCircle=L.circle([lat,lng],{
-    radius:Math.min(position.coords.accuracy,100),
-    color:"#399bff",
-    weight:1,
-    fillColor:"#399bff",
-    fillOpacity:.06
-  }).addTo(map);
-
-  loadNearbyGhosts();
-}
-
-/* Zufällige Kartenwahl nach Spawnchance */
-function weightedCard(){
-  const total=cards.reduce((sum,c)=>sum+Math.max(0,Number(c.spawnChance)||0),0);
-  if(total<=0) return cards[Math.floor(Math.random()*cards.length)];
-
-  let value=Math.random()*total;
-
-  for(const card of cards){
-    value-=Math.max(0,Number(card.spawnChance)||0);
-    if(value<=0) return card;
-  }
-
-  return cards[cards.length-1];
-}
-
-/*
-  Erste lokale Version:
-  Geister erscheinen in einem kleinen Bereich
-  um den aktuellen Standort.
-  Ihre Positionen werden hier lokal erzeugt.
-  Die spätere gemeinsame Weltverteilung benötigt
-  eine zentrale Datenquelle.
-*/
-function loadNearbyGhosts(){
-  if(!playerPosition || cards.length===0) return;
-
-  const key=
-    Math.round(playerPosition.lat*10000)+":"+
-    Math.round(playerPosition.lng*10000);
-
-  if(key===lastSpawnKey) return;
-  lastSpawnKey=key;
-
-  ghosts.forEach(g=>{
-    if(g.marker) map.removeLayer(g.marker);
+ if(!playerMarker){
+  const icon=L.divIcon({
+   className:"",html:'<div class="playerMarker"></div>',
+   iconSize:[18,18],iconAnchor:[9,9]
   });
-  ghosts=[];
+  playerMarker=L.marker(pos,{icon,zIndexOffset:1000}).addTo(map);
+  map.setView(pos,17);
+ }else playerMarker.setLatLng(pos);
 
-  const count=5;
+ if(accuracyCircle)map.removeLayer(accuracyCircle);
+ accuracyCircle=L.circle(pos,{
+  radius:Math.min(p.coords.accuracy,100),
+  color:"#399bff",weight:1,fillColor:"#399bff",fillOpacity:.05
+ }).addTo(map);
 
-  for(let i=0;i<count;i++){
-    const card=weightedCard();
-
-    // Kleine visuelle Streuung um den aktuellen Standort.
-    // Alle Begegnungen bleiben im 20-Meter-Radius.
-    const angle=Math.random()*Math.PI*2;
-    const distance=Math.random()*8;
-
-    const lat=playerPosition.lat+
-      Math.cos(angle)*distance/111320;
-
-    const lng=playerPosition.lng+
-      Math.sin(angle)*distance/
-      (111320*Math.max(.1,Math.cos(playerPosition.lat*Math.PI/180)));
-
-    const ghost={
-      instanceId:"ghost_"+Date.now()+"_"+i+"_"+Math.random(),
-      card,
-      lat,
-      lng,
-      collected:false,
-      marker:null
-    };
-
-    const icon=L.divIcon({
-      className:"",
-      html:'<div class="ghostMarker">👻</div>',
-      iconSize:[42,42],
-      iconAnchor:[21,21]
-    });
-
-    ghost.marker=L.marker([lat,lng],{icon}).addTo(map);
-
-    ghost.marker.on("click",()=>openGhost(ghost));
-
-    ghosts.push(ghost);
-  }
+ loadVisibleGhosts();
 }
 
-function distanceMeters(lat1,lon1,lat2,lon2){
-  const R=6371000;
-  const rad=x=>x*Math.PI/180;
-
-  const dLat=rad(lat2-lat1);
-  const dLon=rad(lon2-lon1);
-
-  const a=
-    Math.sin(dLat/2)**2+
-    Math.cos(rad(lat1))*
-    Math.cos(rad(lat2))*
-    Math.sin(dLon/2)**2;
-
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+function hash(str){
+ let h=2166136261;
+ for(let i=0;i<str.length;i++){
+  h^=str.charCodeAt(i);
+  h=Math.imul(h,16777619);
+ }
+ return h>>>0;
+}
+function random01(seed){
+ return hash(String(seed)+":"+WORLD_SEED)/4294967296;
+}
+function weightedCard(seed){
+ const total=cards.reduce((s,c)=>s+Math.max(0,Number(c.spawnChance)||0),0);
+ if(total<=0)return cards[0];
+ let r=random01(seed+"card")*total;
+ for(const c of cards){
+  r-=Math.max(0,Number(c.spawnChance)||0);
+  if(r<=0)return c;
+ }
+ return cards[cards.length-1];
 }
 
-function openGhost(ghost){
-  if(!playerPosition){
-    toast("Standort noch nicht verfügbar");
-    return;
+/* Generiert weltweit feste Spawnpunkte aus Rasterzellen.
+   Nur Zellen im aktuellen Kartenausschnitt werden geladen. */
+function loadVisibleGhosts(){
+ if(!map||!cards.length||!map.getBounds())return;
+
+ const bounds=map.getBounds();
+ const south=Math.max(-85,bounds.getSouth());
+ const north=Math.min(85,bounds.getNorth());
+ const west=bounds.getWest();
+ const east=bounds.getEast();
+
+ const minY=Math.floor(south/CELL);
+ const maxY=Math.floor(north/CELL);
+ const minX=Math.floor(west/CELL);
+ const maxX=Math.floor(east/CELL);
+
+ // Verhindert unnötig große Ladevorgänge bei Weltzoom.
+ if((maxX-minX)*(maxY-minY)>5000)return;
+
+ const found=new Map();
+
+ for(let y=minY;y<=maxY;y++){
+  for(let x=minX;x<=maxX;x++){
+   const seed=x+":"+y;
+
+   // Nicht jede Rasterzelle enthält einen Geist.
+   if(random01(seed+"spawn")>.13)continue;
+
+   const id="world_"+seed;
+   const jitterLat=random01(seed+"lat")*.8+.1;
+   const jitterLng=random01(seed+"lng")*.8+.1;
+
+   const lat=(y+jitterLat)*CELL;
+   const lng=(x+jitterLng)*CELL;
+
+   if(!bounds.contains([lat,lng]))continue;
+
+   const card=weightedCard(seed);
+   found.set(id,{id,lat,lng,card});
   }
+ }
 
-  selectedGhost=ghost;
+ const next=[];
 
-  const distance=distanceMeters(
-    playerPosition.lat,
-    playerPosition.lng,
-    ghost.lat,
-    ghost.lng
-  );
-
-  const already=getCollection().some(
-    item=>item.id===ghost.card.id
-  );
-
-  document.getElementById("modalArt").textContent=ghost.card.emoji||"👻";
-  document.getElementById("modalName").textContent=ghost.card.name;
-  document.getElementById("modalRarity").textContent=ghost.card.rarity;
-  document.getElementById("modalRarity").className=
-    "rarity "+(rarityClass[ghost.card.rarity]||"common");
-
-  document.getElementById("modalDescription").textContent=
-    ghost.card.description||"Ein geheimnisvoller Geist.";
-
-  document.getElementById("distanceText").textContent=
-    "Entfernung: "+Math.round(distance)+" Meter";
-
-  const button=document.getElementById("collectButton");
-
-  if(already){
-    button.textContent="BEREITS GESAMMELT";
-    button.disabled=true;
-    button.style.opacity=".5";
-  }else if(distance>20){
-    button.textContent="ZU WEIT ENTFERNT";
-    button.disabled=true;
-    button.style.opacity=".5";
-  }else{
-    button.textContent="GEIST SAMMELN";
-    button.disabled=false;
-    button.style.opacity="1";
+ for(const [id,g] of found){
+  const existing=ghosts.find(old=>old.id===id);
+  if(existing){
+   next.push(existing);
+   continue;
   }
+  next.push(createGhost(g));
+ }
 
-  document.getElementById("ghostModal").style.display="flex";
+ ghosts.forEach(old=>{
+  if(!found.has(old.id)&&old.marker)map.removeLayer(old.marker);
+ });
+ ghosts=next;
 }
 
+function ghostSVG(color="#9bbfff",variant=0){
+ const shapes=[
+  "M20 88V47C20 24 37 12 60 12S100 24 100 47V88L83 79L68 93L53 80L37 94Z",
+  "M20 87V48C20 25 36 12 60 12S100 25 100 48V87L80 78L60 94L40 78Z",
+  "M20 89V49C20 25 38 12 60 12S100 25 100 49V89L82 78L70 94L55 81L38 95Z"
+ ];
+ return `<svg viewBox="0 0 120 110" xmlns="http://www.w3.org/2000/svg">
+ <defs>
+ <radialGradient id="g${variant}" cx="50%" cy="25%" r="80%">
+ <stop stop-color="#fff"/><stop offset=".35" stop-color="${color}"/>
+ <stop offset="1" stop-color="#263a86"/>
+ </radialGradient>
+ <filter id="gl${variant}"><feGaussianBlur stdDeviation="4"/></filter>
+ </defs>
+ <path d="${shapes[variant%3]}" fill="${color}" opacity=".4" filter="url(#gl${variant})"/>
+ <path d="${shapes[variant%3]}" fill="url(#g${variant})" stroke="#e6f5ff" stroke-width="2"/>
+ <ellipse cx="44" cy="51" rx="5" ry="8" fill="#15213c"/>
+ <ellipse cx="76" cy="51" rx="5" ry="8" fill="#15213c"/>
+ <path d="M52 68Q60 74 68 68" fill="none" stroke="#15213c" stroke-width="3" stroke-linecap="round"/>
+ </svg>`;
+}
+
+function getColor(rarity){
+ return {
+  Common:"#a9bed8",Uncommon:"#49d9a2",Rare:"#49aaff",
+  Epic:"#b27aff",Legendary:"#f1c46c",Mythic:"#ff73ad"
+ }[rarity]||"#a9bed8";
+}
+
+function createGhost(g){
+ const icon=L.divIcon({
+  className:"",
+  html:`<div class="ghostMarker">${ghostSVG(getColor(g.card.rarity),hash(g.id)%3)}</div>`,
+  iconSize:[42,42],iconAnchor:[21,21]
+ });
+ const marker=L.marker([g.lat,g.lng],{icon}).addTo(map);
+ const ghost={...g,marker};
+ marker.on("click",()=>openGhost(ghost));
+ return ghost;
+}
+
+function distanceMeters(a,b,c,d){
+ const rad=x=>x*Math.PI/180,R=6371000;
+ const dl=rad(c-a),dn=rad(d-b);
+ const x=Math.sin(dl/2)**2+
+ Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(dn/2)**2;
+ return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+function makeCard(card,instanceId){
+ const rarity=(card.rarity||"Common").toLowerCase();
+ const art=card.image
+  ? `<img src="${escapeHTML(card.image)}" alt="${escapeHTML(card.name)}" onerror="this.remove()">`
+  : ghostSVG(getColor(card.rarity),hash(card.id)%3);
+
+ return `<div class="tradingCard rarity-${rarity}">
+  <div class="card-inner">
+   <div class="card-top">
+    <span class="card-title">${escapeHTML(card.name)}</span>
+    <span class="card-rarity">${escapeHTML(card.rarity)}</span>
+   </div>
+   <div class="card-art">${art}</div>
+   <div class="card-bottom">
+    <strong>${escapeHTML(card.name)}</strong><br>
+    ${escapeHTML(card.description||"Mysterious creature")}
+    <div class="card-number">WRAITHS · ${escapeHTML(card.id)}</div>
+   </div>
+  </div>
+  <div class="card-shine"></div>
+ </div>`;
+}
+
+function escapeHTML(s){
+ return String(s??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+ }[c]));
+}
+
+function openGhost(g){
+ if(!playerPosition){toast("GPS nicht verfügbar");return}
+ selectedGhost=g;
+
+ const distance=distanceMeters(
+  playerPosition.lat,playerPosition.lng,g.lat,g.lng
+ );
+ const already=getCollection().some(x=>x.spawnId===g.id);
+
+ document.getElementById("previewCard").innerHTML=makeCard(g.card,g.id);
+ document.getElementById("modalName").textContent=g.card.name;
+ document.getElementById("modalDescription").textContent=
+  g.card.description||"A mysterious creature.";
+ document.getElementById("distanceText").textContent=
+  "ENTFERNUNG: "+Math.round(distance)+" METER";
+
+ const button=document.getElementById("collectButton");
+ button.disabled=already||distance>20;
+ button.textContent=already?"BEREITS GESAMMELT":
+  distance>20?"AUSSER REICHWEITE":"GEIST SAMMELN";
+
+ document.getElementById("ghostModal").style.display="flex";
+}
 function closeGhost(){
-  document.getElementById("ghostModal").style.display="none";
-  selectedGhost=null;
+ document.getElementById("ghostModal").style.display="none";
+ selectedGhost=null;
 }
 
 function collectGhost(){
-  if(!selectedGhost||!playerPosition) return;
+ if(!selectedGhost||!playerPosition)return;
 
-  const distance=distanceMeters(
-    playerPosition.lat,
-    playerPosition.lng,
-    selectedGhost.lat,
-    selectedGhost.lng
-  );
+ const d=distanceMeters(
+  playerPosition.lat,playerPosition.lng,
+  selectedGhost.lat,selectedGhost.lng
+ );
+ if(d>20){toast("Du bist zu weit entfernt!");return}
 
-  if(distance>20){
-    toast("Du bist zu weit entfernt!");
-    closeGhost();
-    return;
-  }
+ const collection=getCollection();
+ if(collection.some(x=>x.spawnId===selectedGhost.id)){
+  toast("Bereits gesammelt");return;
+ }
 
-  const collection=getCollection();
+ collection.push({
+  spawnId:selectedGhost.id,
+  cardId:selectedGhost.card.id,
+  collectedAt:new Date().toISOString()
+ });
+ saveCollection(collection);
 
-  if(collection.some(c=>c.id===selectedGhost.card.id)){
-    toast("Diesen Geist besitzt du bereits!");
-    closeGhost();
-    return;
-  }
+ map.removeLayer(selectedGhost.marker);
+ ghosts=ghosts.filter(g=>g.id!==selectedGhost.id);
 
-  collection.push({
-    id:selectedGhost.card.id,
-    collectedAt:new Date().toISOString()
-  });
-
-  saveCollection(collection);
-
-  if(selectedGhost.marker){
-    map.removeLayer(selectedGhost.marker);
-  }
-
-  ghosts=ghosts.filter(g=>g!==selectedGhost);
-
-  const name=selectedGhost.card.name;
-  closeGhost();
-  toast("✨ "+name+" wurde gesammelt!");
-}
-
-/* Navigation */
-function showPage(page){
-  currentPage=page;
-
-  document.getElementById("mapNav").classList.toggle("active",page==="map");
-  document.getElementById("collectionNav").classList.toggle("active",page==="collection");
-
-  if(page==="collection"){
-    renderCollection();
-    document.getElementById("panelTitle").textContent="Deine Sammlung";
-    document.getElementById("panel").style.display="flex";
-  }else{
-    closePanel();
-    setTimeout(()=>{if(map)map.invalidateSize()},100);
-  }
-}
-
-function closePanel(){
-  document.getElementById("panel").style.display="none";
-  currentPage="map";
-  document.getElementById("mapNav").classList.add("active");
-  document.getElementById("collectionNav").classList.remove("active");
+ const name=selectedGhost.card.name;
+ closeGhost();
+ toast(name+" wurde deiner Sammlung hinzugefügt!");
 }
 
 function renderCollection(){
-  const grid=document.getElementById("collectionGrid");
-  const collection=getCollection();
+ const grid=document.getElementById("collectionGrid");
+ const collection=getCollection();
+ grid.innerHTML="";
 
-  grid.innerHTML="";
+ document.getElementById("collectionInfo").textContent=
+  collection.length+" GEISTER GESAMMELT";
 
-  if(collection.length===0){
-    grid.innerHTML=`
-      <div id="empty">
-        <div style="font-size:55px">👻</div>
-        <h3>Noch keine Geister!</h3>
-        <p>Entdecke Geister auf der Karte und sammle sie.</p>
-      </div>`;
-    return;
-  }
+ if(!collection.length){
+  grid.innerHTML=`<div id="empty">
+  <svg viewBox="0 0 120 120">
+  <path d="M20 91V50C20 25 38 12 60 12S100 25 100 50V91L82 80L68 95L53 82L37 95Z" fill="#8eb7e8" stroke="#d4eaff" stroke-width="3"/>
+  <ellipse cx="44" cy="53" rx="5" ry="8" fill="#172541"/>
+  <ellipse cx="76" cy="53" rx="5" ry="8" fill="#172541"/>
+  </svg>
+  <h3>DEINE SAMMLUNG IST LEER</h3>
+  <p>Entdecke deinen ersten Geist auf der Karte.</p>
+  </div>`;
+  return;
+ }
 
-  collection.forEach(item=>{
-    const card=cards.find(c=>c.id===item.id);
-    if(!card)return;
-
-    const div=document.createElement("div");
-    div.className="card";
-
-    const art=document.createElement("div");
-    art.className="cardArt";
-    art.textContent=card.emoji||"👻";
-
-    const name=document.createElement("div");
-    name.className="cardName";
-    name.textContent=card.name;
-
-    const rarity=document.createElement("div");
-    rarity.className="rarity "+(rarityClass[card.rarity]||"common");
-    rarity.textContent=card.rarity;
-
-    div.append(art,name,rarity);
-    grid.appendChild(div);
-  });
+ collection.forEach(item=>{
+  const card=cards.find(c=>c.id===item.cardId);
+  if(!card)return;
+  const el=document.createElement("div");
+  el.innerHTML=makeCard(card,item.spawnId);
+  grid.appendChild(el.firstElementChild);
+ });
 }
 
-function centerPlayer(){
-  if(!playerPosition){
-    toast("Noch kein GPS-Standort verfügbar");
-    return;
-  }
+function showPage(page){
+ document.getElementById("mapNav").classList.toggle("active",page==="map");
+ document.getElementById("collectionNav").classList.toggle("active",page==="collection");
 
-  map.setView(
-    [playerPosition.lat,playerPosition.lng],
-    18,
-    {animate:true}
-  );
+ if(page==="collection"){
+  renderCollection();
+  document.getElementById("panel").style.display="flex";
+ }else closePanel();
+}
+function closePanel(){
+ document.getElementById("panel").style.display="none";
+ document.getElementById("mapNav").classList.add("active");
+ document.getElementById("collectionNav").classList.remove("active");
+ setTimeout(()=>{if(map)map.invalidateSize()},100);
+}
+function centerPlayer(){
+ if(!playerPosition){toast("Kein GPS-Standort");return}
+ map.setView([playerPosition.lat,playerPosition.lng],18,{animate:true});
 }
 
 window.addEventListener("beforeunload",()=>{
-  if(watchId!==null){
-    navigator.geolocation.clearWatch(watchId);
-  }
+ if(watchId!==null)navigator.geolocation.clearWatch(watchId);
 });
 </script>
-
 </body>
 </html>

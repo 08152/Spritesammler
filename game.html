@@ -13,74 +13,238 @@
     box-sizing: border-box;
 }
 
-html, body {
-    width: 100%;
-    height: 100%;
+body {
     overflow: hidden;
-    background: #090909;
+    background: #101010;
     font-family: Arial, sans-serif;
+    color: white;
 }
 
 canvas {
     display: block;
 }
 
-#crosshair {
+#hud {
     position: fixed;
-    left: 50%;
-    top: 50%;
-    width: 5px;
-    height: 5px;
-    background: white;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 5px black;
+    inset: 0;
     pointer-events: none;
-    z-index: 5;
+}
+
+.topbar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    gap: 12px;
+}
+
+.panel {
+    background: rgba(15,17,19,.88);
+    border: 1px solid rgba(255,205,95,.35);
+    border-radius: 10px;
+    padding: 13px 18px;
+    box-shadow: 0 5px 20px #0008;
+    backdrop-filter: blur(10px);
+}
+
+.small {
+    color: #aaa;
+    font-size: 11px;
+    letter-spacing: 2px;
+}
+
+.big {
+    color: #ffd05b;
+    font-size: 23px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    border: 1px solid white;
+    border-radius: 50%;
+    transform: translate(-50%,-50%);
+    box-shadow: 0 0 5px black;
+}
+
+#inventory {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    background: rgba(10,10,10,.85);
+    border: 1px solid #ffffff25;
+    border-radius: 12px;
+    padding: 10px;
+    backdrop-filter: blur(10px);
+}
+
+.slot {
+    width: 54px;
+    height: 58px;
+    background: #292a29;
+    border: 1px solid #555;
+    border-radius: 7px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #e7b844;
+    font-size: 22px;
+}
+
+.slot.active {
+    border: 2px solid #ffd05b;
+    background: #514329;
+}
+
+.slot-number {
+    position: absolute;
+    top: 3px;
+    left: 5px;
+    font-size: 10px;
+    color: #aaa;
+}
+
+.slot-count {
+    position: absolute;
+    bottom: 4px;
+    right: 5px;
+    font-size: 10px;
+    color: white;
+}
+
+#interaction {
+    position: absolute;
+    bottom: 115px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111d;
+    border: 1px solid #ffd05b88;
+    padding: 12px 22px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+    text-align: center;
+}
+
+#interaction b {
+    color: #ffd05b;
+}
+
+#hint {
+    position: absolute;
+    bottom: 190px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #ddd;
+    font-size: 12px;
+    text-shadow: 0 2px 5px black;
 }
 
 #startScreen {
     position: fixed;
     inset: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: rgba(0,0,0,0.8);
-    color: white;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,.88);
+}
+
+.startPanel {
+    width: min(420px,90%);
+    background: #171817;
+    border: 1px solid #bd903d;
+    border-radius: 15px;
+    padding: 40px;
+    text-align: center;
+    box-shadow: 0 15px 70px #000;
+}
+
+.startPanel h1 {
+    font-size: 34px;
+    color: #ffd05b;
+    margin-bottom: 10px;
+}
+
+.startPanel p {
+    color: #aaa;
+    margin-bottom: 28px;
+}
+
+button {
+    border: none;
     cursor: pointer;
 }
 
-#startScreen button {
-    padding: 20px 55px;
-    background: #dba52e;
-    border: 2px solid #ffdf83;
+#startButton {
+    width: 100%;
+    padding: 17px;
     border-radius: 8px;
-    color: #201500;
-    font-size: 22px;
-    font-weight: bold;
-    cursor: pointer;
+    background: linear-gradient(135deg,#ffe08b,#bd831d);
+    color: #251900;
+    font-size: 18px;
+    font-weight: 900;
 }
 
-#startScreen button:hover {
-    background: #ffcf59;
+#startButton:hover {
+    filter: brightness(1.15);
 }
 
-#hud {
-    position: fixed;
+#progress {
+    position: absolute;
     top: 20px;
-    left: 20px;
-    color: white;
-    font-size: 17px;
-    text-shadow: 0 2px 5px black;
-    pointer-events: none;
-    z-index: 4;
+    right: 20px;
+    width: 210px;
 }
 
-#coinCount {
-    color: #ffd35c;
-    font-size: 25px;
-    font-weight: bold;
+.progressBar {
+    height: 7px;
+    background: #383838;
+    margin-top: 10px;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+#progressFill {
+    height: 100%;
+    width: 0%;
+    background: #eebd48;
+}
+
+#message {
+    position: absolute;
+    top: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #171717eF;
+    border: 1px solid #bd903d;
+    border-radius: 8px;
+    padding: 12px 20px;
+    opacity: 0;
+    transition: opacity .2s;
+}
+
+@media(max-width:650px) {
+    .slot {
+        width: 35px;
+        height: 43px;
+    }
+    #inventory {
+        gap: 3px;
+        padding: 6px;
+    }
+    .panel {
+        padding: 9px;
+    }
 }
 </style>
 </head>
@@ -88,14 +252,47 @@ canvas {
 <body>
 
 <div id="startScreen">
-    <button id="startButton">SPIEL STARTEN</button>
+    <div class="startPanel">
+        <h1>ONE MILLION COINS</h1>
+        <p>Collect. Deposit. Upgrade.</p>
+        <button id="startButton">SPIEL STARTEN</button>
+    </div>
 </div>
 
-<div id="crosshair"></div>
-
 <div id="hud">
-    <div>COINS</div>
-    <div id="coinCount">0</div>
+
+    <div class="topbar">
+        <div class="panel">
+            <div class="small">GELD</div>
+            <div class="big" id="money">0</div>
+        </div>
+
+        <div class="panel">
+            <div class="small">INVENTAR</div>
+            <div class="big" id="held">0</div>
+        </div>
+    </div>
+
+    <div class="panel" id="progress">
+        <div class="small">FORTSCHRITT</div>
+        <div class="big" id="progressText">0 / 1.000.000</div>
+        <div class="progressBar">
+            <div id="progressFill"></div>
+        </div>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div id="hint">
+        WASD · Laufen &nbsp; | &nbsp; Maus · Umschauen &nbsp; | &nbsp; E · Interagieren
+    </div>
+
+    <div id="interaction"></div>
+
+    <div id="inventory"></div>
+
+    <div id="message"></div>
+
 </div>
 
 <script type="module" src="game.js"></script>

@@ -1,23 +1,13 @@
 
 [
   {
-    "id": "SPR-001-NORMAL",
-    "baseId": "SPR-001",
-    "name": "Blinky",
-    "image": "1.png",
-    "rarity": "Legendär",
-    "variant": "Normal",
-    "value": 1500,
-    "spawnChance": 2.4
+    "id": "phantom",
+    "name": "Phantom",
+    "rarity": "Epic",
+    "spawnChance": 2.5,
+    "image": "",
+    "description": "Ein sagenumwobener Geist, der aus dem dichten Nebel der finalen Sturmzonen geboren wurde und als absoluter Meister des Versteckspiels gilt. Er verschmilzt perfekt mit seiner Umgebung, wird im Gebüsch für gegnerische Augen komplett unsichtbar und hinterlässt bei Gefahr eine täuschend echte Pixel-Kopie von sich selbst, um Verfolger geschickt in die Irre zu führen. Selbst in scheinbar aussichtslosen Situationen ohne jede Munition leitet er seinen Trainer mit sicherem Instinkt und erhöhter Geschwindigkeit an allen Kämpfen vorbei bis an die absolute Spitze.
+"
   },
-  {
-    "id": "SPR-002-NORMAL",
-    "baseId": "SPR-002",
-    "name": "Oreling",
-    "image": "2.png",
-    "rarity": "selten",
-    "variant": "Normal",
-    "value": 500,
-    "spawnChance": 25
-  }
+  
 ]

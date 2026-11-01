@@ -7,11 +7,15 @@ export class PhysicsSystem {
 
         this.gravity = options.gravity ?? -9.81;
 
-        this.maxBodies = options.maxBodies ?? 350;
+        // Limit gilt nur für aktive dynamische Münzen.
+        this.maxBodies = Math.max(
+            5000,
+            options.maxBodies ?? 5000
+        );
 
         this.fixedTimeStep = options.fixedTimeStep ?? 1 / 60;
         this.maxSubSteps = options.maxSubSteps ?? 8;
-        this.maxFrameTime = options.maxFrameTime ?? 0.1;
+        this.maxFrameTime = options.maxFrameTime ?? 0.12;
 
         this.accumulator = 0;
         this.elapsed = 0;
@@ -24,8 +28,8 @@ export class PhysicsSystem {
 
         this.nextId = 1;
 
-        this.bodies = new Map();
         this.coins = new Map();
+        this.bodies = new Map();
         this.coinPiles = new Map();
         this.staticBodies = new Set();
 
@@ -34,7 +38,8 @@ export class PhysicsSystem {
             activeBodies: 0,
             totalCoins: 0,
             pileColliders: 0,
-            droppedTime: 0
+            droppedTime: 0,
+            rejectedCoins: 0
         };
 
         this.defaultCoinOptions = {
@@ -42,7 +47,9 @@ export class PhysicsSystem {
             thickness: 0.1,
             density: 2.5,
             friction: 0.95,
-            restitution: 0.02
+            restitution: 0.025,
+            linearDamping: 0.35,
+            angularDamping: 0.65
         };
     }
 
@@ -74,7 +81,7 @@ export class PhysicsSystem {
 
             if (parameters) {
                 parameters.numSolverIterations = 16;
-                parameters.numInternalPgsIterations = 4;
+                parameters.numInternalPgsIterations = 6;
             }
 
             this.world.timestep = this.fixedTimeStep;
@@ -96,7 +103,7 @@ export class PhysicsSystem {
 
         if (!this.initialized || !this.world) {
             throw new Error(
-                "PhysicsSystem wurde noch nicht initialisiert. Zuerst await physics.init() aufrufen."
+                "PhysicsSystem ist nicht initialisiert. Zuerst await physics.init() aufrufen."
             );
         }
     }
@@ -134,17 +141,27 @@ export class PhysicsSystem {
         return this.bodies.size;
     }
 
+    getRemainingCapacity() {
+        return Math.max(0, this.maxBodies - this.coins.size);
+    }
+
     getStats() {
 
         this.stats.activeBodies = this.coins.size;
         this.stats.totalCoins = this.coins.size;
         this.stats.pileColliders = this.coinPiles.size;
 
-        return { ...this.stats };
+        return {
+            ...this.stats,
+            maxBodies: this.maxBodies,
+            remainingCapacity: this.getRemainingCapacity(),
+            staticBodies: this.staticBodies.size
+        };
     }
 
     // --------------------------------------------------
     // DYNAMISCHE MÜNZEN
+    // Ausschließlich für fallengelassene Münzen gedacht
     // --------------------------------------------------
 
     createCoin(position, options = {}) {
@@ -152,6 +169,7 @@ export class PhysicsSystem {
         this.ensureInitialized();
 
         if (this.coins.size >= this.maxBodies) {
+            this.stats.rejectedCoins++;
             return null;
         }
 
@@ -167,8 +185,8 @@ export class PhysicsSystem {
 
         const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(pos.x, pos.y, pos.z)
-            .setLinearDamping(options.linearDamping ?? 0.35)
-            .setAngularDamping(options.angularDamping ?? 0.65)
+            .setLinearDamping(settings.linearDamping)
+            .setAngularDamping(settings.angularDamping)
             .setCanSleep(true)
             .setCcdEnabled(true);
 
@@ -190,13 +208,18 @@ export class PhysicsSystem {
 
         const coin = {
             id: this.createId(),
+
             body,
             collider,
+
             active: true,
             savedState: null,
+
             radius,
             thickness,
+
             options: settings,
+
             lastPlayerPush: 0
         };
 
@@ -204,6 +227,11 @@ export class PhysicsSystem {
         this.bodies.set(coin.id, coin);
 
         return coin;
+    }
+
+    // Expliziter Name für neu fallengelassene Münzen.
+    createDroppedCoin(position, options = {}) {
+        return this.createCoin(position, options);
     }
 
     createFlowCoin(position, options = {}) {
@@ -215,7 +243,7 @@ export class PhysicsSystem {
             restitution: 0.04
         });
 
-        if (coin) {
+        if (coin && coin.body) {
             coin.body.wakeUp();
         }
 
@@ -224,17 +252,8 @@ export class PhysicsSystem {
 
     // --------------------------------------------------
     // MÜNZENSTAPEL
+    // Eine statische Kollisionsfläche statt vieler Körper
     // --------------------------------------------------
-
-    /*
-       Erstellt nur eine Kollisionsfläche am oberen Ende
-       einer vertikalen Münzsäule.
-
-       position.y = Mittelpunkt der untersten Münze.
-       count = Anzahl der Münzen in der Säule.
-
-       Keine dynamischen Körper für jede einzelne Münze!
-    */
 
     createCoinPile(position, count, options = {}) {
 
@@ -242,19 +261,19 @@ export class PhysicsSystem {
 
         const pos = this.vector(position);
 
-        const radius = options.radius ?? 0.188;
-        const thickness = options.thickness ?? 0.1;
-
-        count = Math.max(0, Math.floor(count));
-
         const pile = {
             id: this.createId(),
+
             position: pos,
-            count,
-            radius,
-            thickness,
+
+            count: Math.max(0, Math.floor(count)),
+
+            radius: options.radius ?? 0.188,
+            thickness: options.thickness ?? 0.1,
+
             body: null,
             collider: null,
+
             enabled: true
         };
 
@@ -268,7 +287,9 @@ export class PhysicsSystem {
     buildPileCollider(pile) {
 
         if (pile.body) {
+
             this.world.removeRigidBody(pile.body);
+
             pile.body = null;
             pile.collider = null;
         }
@@ -388,7 +409,10 @@ export class PhysicsSystem {
             body
         );
 
-        const entry = { body, collider };
+        const entry = {
+            body,
+            collider
+        };
 
         this.staticBodies.add(entry);
 
@@ -421,14 +445,17 @@ export class PhysicsSystem {
 
         const force = this.vector(impulse);
 
-        coin.body.applyImpulse(force, true);
-
         if (point) {
+
             coin.body.applyImpulseAtPoint(
                 force,
                 this.vector(point),
                 true
             );
+
+        } else {
+
+            coin.body.applyImpulse(force, true);
         }
 
         coin.body.wakeUp();
@@ -443,9 +470,27 @@ export class PhysicsSystem {
         const center = this.vector(position);
 
         const maxDistance = Math.max(0.01, radius);
+        const maxDistanceSquared = maxDistance * maxDistance;
+
         const force = this.validNumber(strength, 0);
 
         let affected = 0;
+        let dir = null;
+
+        if (direction) {
+
+            dir = this.vector(direction);
+
+            const length = Math.sqrt(
+                dir.x * dir.x +
+                dir.y * dir.y +
+                dir.z * dir.z
+            ) || 1;
+
+            dir.x /= length;
+            dir.y /= length;
+            dir.z /= length;
+        }
 
         for (const coin of this.coins.values()) {
 
@@ -457,26 +502,24 @@ export class PhysicsSystem {
             const dy = p.y - center.y;
             const dz = p.z - center.z;
 
-            const distance = Math.sqrt(
-                dx * dx + dy * dy + dz * dz
-            );
+            const distanceSquared =
+                dx * dx +
+                dy * dy +
+                dz * dz;
 
-            if (distance >= maxDistance) continue;
+            if (distanceSquared >= maxDistanceSquared) {
+                continue;
+            }
+
+            const distance = Math.sqrt(distanceSquared);
 
             let nx, ny, nz;
 
-            if (direction) {
+            if (dir) {
 
-                const dir = this.vector(direction);
-                const length = Math.sqrt(
-                    dir.x * dir.x +
-                    dir.y * dir.y +
-                    dir.z * dir.z
-                ) || 1;
-
-                nx = dir.x / length;
-                ny = dir.y / length;
-                nz = dir.z / length;
+                nx = dir.x;
+                ny = dir.y;
+                nz = dir.z;
 
             } else {
 
@@ -518,6 +561,8 @@ export class PhysicsSystem {
 
     // --------------------------------------------------
     // FÖRDERBAND
+    // Wirkt nur auf dynamische Münzen.
+    // Maschinenmünzen sollen später rein visuell bewegt werden.
     // --------------------------------------------------
 
     applyConveyor(position, size, velocity, strength = 0.2) {
@@ -568,26 +613,59 @@ export class PhysicsSystem {
     }
 
     // --------------------------------------------------
-    // MÜNZEN EINFIEREN UND AKTIVIEREN
+    // ZUSTAND SPEICHERN
     // --------------------------------------------------
 
     saveState(coin) {
 
-        if (!coin || !coin.body) return null;
+        if (!coin || !coin.body) {
+            return null;
+        }
+
+        const p = coin.body.translation();
+        const r = coin.body.rotation();
+        const v = coin.body.linvel();
+        const a = coin.body.angvel();
 
         return {
-            translation: { ...coin.body.translation() },
-            rotation: { ...coin.body.rotation() },
-            linvel: { ...coin.body.linvel() },
-            angvel: { ...coin.body.angvel() }
+            translation: {
+                x: p.x,
+                y: p.y,
+                z: p.z
+            },
+
+            rotation: {
+                x: r.x,
+                y: r.y,
+                z: r.z,
+                w: r.w
+            },
+
+            linvel: {
+                x: v.x,
+                y: v.y,
+                z: v.z
+            },
+
+            angvel: {
+                x: a.x,
+                y: a.y,
+                z: a.z
+            }
         };
     }
+
+    // --------------------------------------------------
+    // MÜNZEN EINFIEREN
+    // --------------------------------------------------
 
     freezeCoin(coin) {
 
         this.ensureInitialized();
 
-        if (!coin || !coin.active) return false;
+        if (!coin || !coin.active || !coin.body) {
+            return false;
+        }
 
         coin.savedState = this.saveState(coin);
 
@@ -602,13 +680,34 @@ export class PhysicsSystem {
         return true;
     }
 
+    freezeMany(coins) {
+
+        let count = 0;
+
+        for (const coin of coins) {
+
+            if (this.freezeCoin(coin)) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    // --------------------------------------------------
+    // MÜNZEN WIEDER AKTIVIEREN
+    // --------------------------------------------------
+
     resumeCoin(coin, position = null) {
 
         this.ensureInitialized();
 
-        if (!coin || coin.active) return false;
+        if (!coin || coin.active) {
+            return false;
+        }
 
         if (this.coins.size >= this.maxBodies) {
+            this.stats.rejectedCoins++;
             return false;
         }
 
@@ -622,10 +721,15 @@ export class PhysicsSystem {
             ? this.vector(position)
             : state.translation;
 
+        const settings = {
+            ...this.defaultCoinOptions,
+            ...(coin.options || {})
+        };
+
         const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(pos.x, pos.y, pos.z)
-            .setLinearDamping(0.35)
-            .setAngularDamping(0.65)
+            .setLinearDamping(settings.linearDamping)
+            .setAngularDamping(settings.angularDamping)
             .setCanSleep(true)
             .setCcdEnabled(true);
 
@@ -635,9 +739,10 @@ export class PhysicsSystem {
             coin.thickness / 2,
             coin.radius
         )
-            .setDensity(coin.options.density)
-            .setFriction(coin.options.friction)
-            .setRestitution(coin.options.restitution);
+            .setDensity(settings.density)
+            .setFriction(settings.friction)
+            .setRestitution(settings.restitution)
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
 
         const collider = this.world.createCollider(
             colliderDesc,
@@ -656,27 +761,15 @@ export class PhysicsSystem {
         coin.active = true;
 
         this.coins.set(coin.id, coin);
+        this.bodies.set(coin.id, coin);
 
         body.wakeUp();
 
         return true;
     }
 
-    freezeMany(coins) {
-
-        let count = 0;
-
-        for (const coin of coins) {
-            if (this.freezeCoin(coin)) {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
     // --------------------------------------------------
-    // TRANSFORM
+    // TRANSFORM ABFRAGEN
     // --------------------------------------------------
 
     getTransform(coin) {
@@ -685,9 +778,22 @@ export class PhysicsSystem {
             return null;
         }
 
+        const p = coin.body.translation();
+        const r = coin.body.rotation();
+
         return {
-            position: { ...coin.body.translation() },
-            rotation: { ...coin.body.rotation() }
+            position: {
+                x: p.x,
+                y: p.y,
+                z: p.z
+            },
+
+            rotation: {
+                x: r.x,
+                y: r.y,
+                z: r.z,
+                w: r.w
+            }
         };
     }
 
@@ -717,18 +823,21 @@ export class PhysicsSystem {
     }
 
     // --------------------------------------------------
-    // PHYSIK-UPDATE
+    // PHYSIK UPDATE
     // --------------------------------------------------
 
     update(deltaTime) {
 
-        if (!this.initialized || !this.world) return;
+        if (!this.initialized || !this.world) {
+            return;
+        }
 
         let dt = Number.isFinite(deltaTime)
             ? Math.max(0, deltaTime)
             : 0;
 
         if (dt > this.maxFrameTime) {
+
             this.stats.droppedTime += dt - this.maxFrameTime;
             dt = this.maxFrameTime;
         }
@@ -773,11 +882,13 @@ export class PhysicsSystem {
         if (!this.world) return;
 
         for (const pile of this.coinPiles.values()) {
+
             pile.body = null;
             pile.collider = null;
         }
 
         for (const coin of this.bodies.values()) {
+
             coin.body = null;
             coin.collider = null;
             coin.active = false;
@@ -797,6 +908,8 @@ export class PhysicsSystem {
         this.world = null;
 
         this.initialized = false;
+        this.initializing = null;
+
         this.accumulator = 0;
         this.elapsed = 0;
     }

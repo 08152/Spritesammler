@@ -84,6 +84,10 @@ renderer.domElement.style.position = "fixed";
 renderer.domElement.style.inset = "0";
 renderer.domElement.style.zIndex = "0";
 
+document.body.style.margin = "0";
+document.body.style.overflow = "hidden";
+document.body.style.background = "#101518";
+
 document.body.appendChild(renderer.domElement);
 
 // ============================================================
@@ -93,77 +97,11 @@ document.body.appendChild(renderer.domElement);
 const style = document.createElement("style");
 
 style.textContent = `
-* {
-    box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
-    margin: 0;
-    overflow: hidden;
-    background: #101518;
     font-family: Arial, sans-serif;
     color: white;
-}
-
-canvas {
-    display: block;
-}
-
-#startScreen {
-    position: fixed;
-    inset: 0;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 22px;
-    background:
-        radial-gradient(ellipse at center, #253033 0%, #101619 70%, #080c0e 100%);
-    backdrop-filter: blur(12px);
-    pointer-events: auto;
-}
-
-#startScreen h1 {
-    margin: 0;
-    font-size: clamp(35px, 7vw, 76px);
-    font-weight: 900;
-    letter-spacing: 5px;
-    text-align: center;
-    color: #f7d477;
-    text-shadow: 0 0 30px #d99a1955;
-}
-
-#startScreen p {
-    color: #b8c2c4;
-    letter-spacing: 4px;
-    font-size: 13px;
-    text-align: center;
-}
-
-#startButton {
-    min-width: 230px;
-    padding: 19px 35px;
-    border: 1px solid #f6d77e;
-    border-radius: 9px;
-    background: linear-gradient(135deg, #f3d27a, #b77b20);
-    color: #17130a;
-    font-size: 17px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    cursor: pointer;
-    pointer-events: auto;
-    transition: .2s;
-    box-shadow: 0 8px 35px #d99a1940;
-}
-
-#startButton:hover {
-    transform: translateY(-3px) scale(1.04);
-    filter: brightness(1.15);
-}
-
-#startButton:active {
-    transform: scale(.97);
 }
 
 #hud {
@@ -345,11 +283,7 @@ canvas {
     inset: 0;
     z-index: 5;
     pointer-events: none;
-    background: radial-gradient(
-        ellipse at center,
-        transparent 48%,
-        #00000066 100%
-    );
+    background: radial-gradient(ellipse at center, transparent 48%, #00000066 100%);
 }
 
 @media(max-width: 650px) {
@@ -388,7 +322,7 @@ canvas {
 document.head.appendChild(style);
 
 // ============================================================
-// UI ERSTELLEN ODER VORHANDENE ELEMENTE VERWENDEN
+// HUD
 // ============================================================
 
 function getOrCreate(id, tag = "div", parent = document.body) {
@@ -403,18 +337,8 @@ function getOrCreate(id, tag = "div", parent = document.body) {
     return element;
 }
 
-const startScreen = getOrCreate("startScreen");
-let startButton = document.getElementById("startButton");
-
-if (!startButton) {
-    startScreen.innerHTML = `
-        <h1>ONE MILLION COINS</h1>
-        <p>COLLECT. DEPOSIT. UPGRADE.</p>
-        <button id="startButton">SPIEL STARTEN</button>
-    `;
-
-    startButton = document.getElementById("startButton");
-}
+// Alten Startbildschirm entfernen
+document.getElementById("startScreen")?.remove();
 
 const hud = getOrCreate("hud");
 const topHUD = getOrCreate("topHUD", "div", hud);
@@ -447,14 +371,12 @@ if (!document.getElementById("progressText")) {
     `;
 }
 
-controlsHint.textContent = "WASD: Bewegen  |  Maus: Umschauen  |  Q: Ablegen  |  E: Einzahlen";
-machineHint.textContent = "MÜNZENZÄHLER: E zum Einzahlen";
+controlsHint.textContent =
+    "WASD: Bewegen | Maus: Umschauen | Q: Ablegen | E: Einzahlen";
 
-document.body.appendChild(
-    Object.assign(document.createElement("div"), {
-        id: "vignette"
-    })
-);
+machineHint.textContent = "MÜNZZÄHLER: E zum Einzahlen";
+
+const vignette = getOrCreate("vignette");
 
 // ============================================================
 // PHYSIK
@@ -467,8 +389,6 @@ const world = new RAPIER.World({
 });
 
 world.timestep = 1 / 60;
-
-const eventQueue = new RAPIER.EventQueue(true);
 
 let physicsAccumulator = 0;
 
@@ -510,7 +430,6 @@ if (coinParts.length === 0) {
 
 // ============================================================
 // DETAILLIERTE INSTANCED COINS
-// Mehrere Mesh-Teile bilden gemeinsam eine Münze.
 // ============================================================
 
 const matrixTemp = new THREE.Matrix4();
@@ -735,14 +654,10 @@ for (let level = 0; level < CONFIG.floors; level++) {
     createFixedCollider(-2.5, y - 0.35, 0, 19, 0.7, 24);
     createFixedCollider(11.25, y - 0.35, 0, 1.5, 0.7, 24);
 
-    // Wandverstärkungen
-
     for (let z = -9; z <= 9; z += 3) {
         createBox(0.16, 7.5, 0.16, steel, -11.3, y + 3.5, z);
         createBox(0.16, 7.5, 0.16, steel, 11.3, y + 3.5, z);
     }
-
-    // Beleuchtung
 
     for (const side of [-1, 1]) {
         for (const z of [-8, 0, 8]) {
@@ -765,8 +680,6 @@ for (let level = 0; level < CONFIG.floors; level++) {
             );
         }
     }
-
-    // Rohre
 
     for (const x of [-10.7, 10.7]) {
         const pipe = new THREE.Mesh(
@@ -803,12 +716,7 @@ for (let level = 0; level < CONFIG.floors - 1; level++) {
         steel
     );
 
-    ramp.position.set(
-        STAIR_X,
-        topY - 4,
-        0
-    );
-
+    ramp.position.set(STAIR_X, topY - 4, 0);
     ramp.rotation.x = rampAngle;
     scene.add(ramp);
 
@@ -934,12 +842,6 @@ for (let level = 0; level < CONFIG.floors; level++) {
     chunks.push(floorChunks);
 }
 
-function getChunk(level, cell) {
-    return chunks[level][
-        cellChunkIds[level][cell.index]
-    ];
-}
-
 // ============================================================
 // SPIELER
 // ============================================================
@@ -994,30 +896,6 @@ function addCoins(amount) {
 
     return amount - remaining;
 }
-
-function removeCoins(amount) {
-    let remaining = amount;
-
-    for (let i = inventory.length - 1; i >= 0; i--) {
-        const removed = Math.min(
-            inventory[i],
-            remaining
-        );
-
-        inventory[i] -= removed;
-        remaining -= removed;
-
-        if (remaining <= 0) break;
-    }
-
-    updateHUD();
-
-    return amount - remaining;
-}
-
-// ============================================================
-// HUD AKTUALISIEREN
-// ============================================================
 
 function updateHUD() {
     const held = getHeldCoins();
@@ -1096,15 +974,12 @@ function createChunkData(chunk) {
             ) {
                 coins.push({
                     localId: coins.length,
-
                     x: position.x,
                     y: floorY + CONFIG.coinThickness * (layer + 0.5),
                     z: position.z,
-
                     rotation: null,
                     velocity: null,
                     angularVelocity: null,
-
                     body: null,
                     collected: false,
                     chunk
@@ -1128,12 +1003,7 @@ function setCoinMatrix(mesh, coin) {
         tempObject.scale.set(0, 0, 0);
         tempObject.quaternion.identity();
     } else {
-        tempObject.position.set(
-            coin.x,
-            coin.y,
-            coin.z
-        );
-
+        tempObject.position.set(coin.x, coin.y, coin.z);
         tempObject.scale.set(1, 1, 1);
 
         if (coin.rotation) {
@@ -1149,11 +1019,7 @@ function setCoinMatrix(mesh, coin) {
     }
 
     tempObject.updateMatrix();
-
-    mesh.setMatrixAt(
-        coin.localId,
-        tempObject.matrix
-    );
+    mesh.setMatrixAt(coin.localId, tempObject.matrix);
 }
 
 // ============================================================
@@ -1180,7 +1046,6 @@ function loadChunk(chunk) {
     mesh.computeBoundingSphere();
 
     scene.add(mesh);
-
     chunk.mesh = mesh;
 }
 
@@ -1191,19 +1056,12 @@ function loadChunk(chunk) {
 const activeCoins = new Set();
 
 function createPhysicsCoin(coin) {
-    if (activeCoins.size >= CONFIG.maxActiveBodies) {
-        return false;
-    }
-
+    if (activeCoins.size >= CONFIG.maxActiveBodies) return false;
     if (coin.body || coin.collected) return false;
 
     const body = world.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(
-                coin.x,
-                coin.y,
-                coin.z
-            )
+            .setTranslation(coin.x, coin.y, coin.z)
             .setLinearDamping(0.25)
             .setAngularDamping(0.35)
             .setCanSleep(true)
@@ -1233,7 +1091,6 @@ function createPhysicsCoin(coin) {
     }
 
     coin.body = body;
-
     activeCoins.add(coin);
 
     return true;
@@ -1273,9 +1130,7 @@ function saveCoinPhysics(coin) {
     };
 
     world.removeRigidBody(body);
-
     activeCoins.delete(coin);
-
     coin.body = null;
 }
 
@@ -1305,20 +1160,14 @@ function activateNearbyCoins() {
             if (!chunk.coins) continue;
 
             for (const coin of chunk.coins) {
-                if (activeCoins.size >= CONFIG.maxActiveBodies) {
-                    return;
-                }
-
+                if (activeCoins.size >= CONFIG.maxActiveBodies) return;
                 if (coin.collected || coin.body) continue;
 
                 const dx = coin.x - player.position.x;
                 const dy = coin.y - player.position.y;
                 const dz = coin.z - player.position.z;
 
-                if (
-                    dx * dx + dy * dy + dz * dz >
-                    radiusSq
-                ) {
+                if (dx * dx + dy * dy + dz * dz > radiusSq) {
                     continue;
                 }
 
@@ -1335,7 +1184,7 @@ function activateNearbyCoins() {
 // ============================================================
 
 function updateCoinPhysics() {
-    world.step(eventQueue);
+    world.step();
 
     for (const coin of activeCoins) {
         if (!coin.body) continue;
@@ -1355,11 +1204,7 @@ function updateCoinPhysics() {
         };
 
         if (coin.chunk && coin.chunk.mesh) {
-            setCoinMatrix(
-                coin.chunk.mesh,
-                coin
-            );
-
+            setCoinMatrix(coin.chunk.mesh, coin);
             coin.chunk.mesh.instanceMatrix.needsUpdate = true;
         }
     }
@@ -1383,12 +1228,7 @@ function getCurrentFloor() {
 }
 
 function isInRampArea(x, z) {
-    return (
-        x > 6.5 &&
-        x < 10.5 &&
-        z > -7.5 &&
-        z < 7.5
-    );
+    return x > 6.5 && x < 10.5 && z > -7.5 && z < 7.5;
 }
 
 function updateVisibility() {
@@ -1402,7 +1242,6 @@ function updateVisibility() {
     frustum.setFromProjectionMatrix(viewProjection);
 
     const currentFloor = getCurrentFloor();
-
     let loads = 0;
 
     for (let floor = 0; floor < CONFIG.floors; floor++) {
@@ -1429,16 +1268,12 @@ function updateVisibility() {
             const visibleFloor =
                 floor === currentFloor ||
                 (
-                    isInRampArea(
-                        player.position.x,
-                        player.position.z
-                    ) &&
+                    isInRampArea(player.position.x, player.position.z) &&
                     Math.abs(floor - currentFloor) <= 1
                 );
 
             const visible =
-                visibleFloor &&
-                frustum.intersectsBox(bounds);
+                visibleFloor && frustum.intersectsBox(bounds);
 
             if (!visible) {
                 if (chunk.mesh) {
@@ -1466,9 +1301,7 @@ function updateVisibility() {
 
     for (const floorChunks of chunks) {
         for (const chunk of floorChunks) {
-            if (chunk.mesh) {
-                loaded.push(chunk);
-            }
+            if (chunk.mesh) loaded.push(chunk);
         }
     }
 
@@ -1476,15 +1309,10 @@ function updateVisibility() {
         loaded
             .filter(chunk => !chunk.mesh.visible)
             .sort((a, b) => a.lastSeen - b.lastSeen)
-            .slice(
-                0,
-                loaded.length - CONFIG.maxLoadedChunks
-            )
+            .slice(0, loaded.length - CONFIG.maxLoadedChunks)
             .forEach(chunk => {
                 freezeChunk(chunk);
-
                 scene.remove(chunk.mesh);
-
                 chunk.mesh = null;
                 chunk.coins = null;
             });
@@ -1540,10 +1368,8 @@ function updateParticles(dt) {
 
         if (particle.userData.life <= 0) {
             scene.remove(particle);
-
             particle.geometry.dispose();
             particle.material.dispose();
-
             particles.splice(i, 1);
         }
     }
@@ -1609,7 +1435,6 @@ function collectCoin() {
     }
 
     setCoinMatrix(chunk.mesh, coin);
-
     chunk.mesh.instanceMatrix.needsUpdate = true;
 
     const added = addCoins(1);
@@ -1622,13 +1447,11 @@ function collectCoin() {
 
     showMessage("+1 COIN");
 
-    if (hit.point) {
-        createPickupEffect(
-            hit.point.x,
-            hit.point.y,
-            hit.point.z
-        );
-    }
+    createPickupEffect(
+        hit.point.x,
+        hit.point.y,
+        hit.point.z
+    );
 }
 
 // ============================================================
@@ -1638,11 +1461,7 @@ function collectCoin() {
 const droppedCoins = [];
 
 function createDroppedCoin(x, y, z) {
-    const mesh = coinFactory.create({
-        x,
-        y,
-        z
-    });
+    const mesh = coinFactory.create({ x, y, z });
 
     scene.add(mesh);
 
@@ -1670,10 +1489,7 @@ function createDroppedCoin(x, y, z) {
         z: random(-0.7, 0.7)
     }, true);
 
-    const dropped = {
-        mesh,
-        body
-    };
+    const dropped = { mesh, body };
 
     mesh.traverse(object => {
         if (object.isMesh) {
@@ -1727,10 +1543,7 @@ function collectDroppedCoin() {
 
     const meshes = droppedCoins.map(coin => coin.mesh);
 
-    const hits = raycaster.intersectObjects(
-        meshes,
-        true
-    );
+    const hits = raycaster.intersectObjects(meshes, true);
 
     if (!hits.length) return;
 
@@ -1756,14 +1569,7 @@ function collectDroppedCoin() {
 
     world.removeRigidBody(dropped.body);
     scene.remove(dropped.mesh);
-
     droppedCoins.splice(index, 1);
-
-    dropped.mesh.traverse(object => {
-        if (object.isMesh) {
-            object.geometry?.dispose?.();
-        }
-    });
 
     addCoins(1);
     showMessage("+1 COIN");
@@ -1774,67 +1580,22 @@ function collectDroppedCoin() {
 // ============================================================
 
 const machine = new THREE.Group();
-
 const machinePosition = CONFIG.machinePosition;
 
-createBox(
-    2.5,
-    2.7,
-    1.7,
-    darkSteel,
-    0,
-    1.35,
-    0,
-    machine
-);
-
-createBox(
-    2.7,
-    0.2,
-    1.9,
-    steel,
-    0,
-    2.75,
-    0,
-    machine
-);
-
-// Rahmen
+createBox(2.5, 2.7, 1.7, darkSteel, 0, 1.35, 0, machine);
+createBox(2.7, 0.2, 1.9, steel, 0, 2.75, 0, machine);
 
 for (const x of [-1.15, 1.15]) {
-    createBox(
-        0.12,
-        2.5,
-        0.12,
-        steel,
-        x,
-        1.35,
-        0.88,
-        machine
-    );
+    createBox(0.12, 2.5, 0.12, steel, x, 1.35, 0.88, machine);
 }
 
-// Münzeinwurf
-
-createBox(
-    1.15,
-    0.12,
-    0.7,
-    darkSteel,
-    0,
-    2.9,
-    0,
-    machine
-);
-
-// Display
+createBox(1.15, 0.12, 0.7, darkSteel, 0, 2.9, 0, machine);
 
 const displayCanvas = document.createElement("canvas");
 displayCanvas.width = 512;
 displayCanvas.height = 192;
 
 const displayContext = displayCanvas.getContext("2d");
-
 const displayTexture = new THREE.CanvasTexture(displayCanvas);
 
 const displayMaterial = new THREE.MeshStandardMaterial({
@@ -1854,32 +1615,23 @@ machine.add(displayPanel);
 
 // Förderband
 
-createBox(
-    1.5,
-    0.18,
-    2.8,
-    darkSteel,
-    0,
-    0.95,
-    2.1,
-    machine
-);
+createBox(1.5, 0.18, 2.8, darkSteel, 0, 0.95, 2.1, machine);
 
 const beltStripes = [];
 
 for (let i = 0; i < 9; i++) {
-    const stripe = createBox(
-        1.45,
-        0.035,
-        0.08,
-        steel,
-        0,
-        1.06,
-        0.9 + i * 0.3,
-        machine
+    beltStripes.push(
+        createBox(
+            1.45,
+            0.035,
+            0.08,
+            steel,
+            0,
+            1.06,
+            0.9 + i * 0.3,
+            machine
+        )
     );
-
-    beltStripes.push(stripe);
 }
 
 const rollers = [];
@@ -1915,7 +1667,7 @@ machine.position.set(
 scene.add(machine);
 
 // ============================================================
-// DISPLAY
+// DISPLAY AKTUALISIEREN
 // ============================================================
 
 function updateMachineDisplay() {
@@ -1955,11 +1707,7 @@ function spawnBeltCoin() {
     const y = 1.55;
     const z = machine.position.z + 1.5;
 
-    const mesh = coinFactory.create({
-        x,
-        y,
-        z
-    });
+    const mesh = coinFactory.create({ x, y, z });
 
     scene.add(mesh);
 
@@ -2022,7 +1770,6 @@ function updateBeltCoins(dt) {
         ) {
             scene.remove(coin.mesh);
             world.removeRigidBody(coin.body);
-
             beltCoins.splice(i, 1);
         }
     }
@@ -2091,7 +1838,6 @@ function updateDepositAnimation(dt) {
 
     if (beltSpawnTimer >= 0.12) {
         beltSpawnTimer = 0;
-
         spawnBeltCoin();
         beltSpawnQueue--;
     }
@@ -2162,7 +1908,6 @@ function updatePlayer(dt) {
     }
 
     player.velocity.y -= 20 * dt;
-
     player.position.y += player.velocity.y * dt;
 
     if (player.position.y <= ground + player.height) {
@@ -2230,12 +1975,10 @@ document.addEventListener("mousemove", event => {
 });
 
 document.addEventListener("mousedown", event => {
-    if (!locked) return;
+    if (!locked || event.button !== 0) return;
 
-    if (event.button === 0) {
-        collectDroppedCoin();
-        collectCoin();
-    }
+    collectDroppedCoin();
+    collectCoin();
 });
 
 document.addEventListener("contextmenu", event => {
@@ -2243,10 +1986,10 @@ document.addEventListener("contextmenu", event => {
 });
 
 // ============================================================
-// STARTSYSTEM – WICHTIGER FIX
+// DIREKTSTART – KEIN STARTKNOPF
 // ============================================================
 
-let gameStarted = false;
+let gameStarted = true;
 
 function requestGamePointerLock() {
     if (
@@ -2257,54 +2000,19 @@ function requestGamePointerLock() {
             const result = renderer.domElement.requestPointerLock();
 
             if (result && typeof result.catch === "function") {
-                result.catch(() => {
-                    showMessage("KLICKE AUF SPIEL STARTEN!");
+                result.catch(error => {
+                    console.warn("Maussteuerung nicht aktiviert:", error);
                 });
             }
         } catch (error) {
-            console.warn("Pointer Lock konnte nicht gestartet werden:", error);
+            console.warn("Pointer Lock nicht verfügbar:", error);
         }
     }
 }
 
-function startGame() {
-    if (!gameStarted) {
-        gameStarted = true;
-
-        lastTime = performance.now();
-
-        requestAnimationFrame(animate);
-    }
-
-    startScreen.style.display = "none";
-
-    requestGamePointerLock();
-}
-
-// Der Button selbst bekommt den Klick-Handler.
-
-startButton.addEventListener("click", event => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    startGame();
-});
-
-// Auch ein Klick auf den Startbildschirm funktioniert.
-
-startScreen.addEventListener("click", event => {
-    if (
-        event.target === startScreen ||
-        event.target === startButton
-    ) {
-        startGame();
-    }
-});
-
-// Ein Klick auf das Spielfeld kann die Maus erneut sperren.
-
+// Klick ins Spielfeld aktiviert die Maussteuerung.
 renderer.domElement.addEventListener("click", () => {
-    if (gameStarted && !locked) {
+    if (!locked) {
         requestGamePointerLock();
     }
 });
@@ -2314,20 +2022,13 @@ document.addEventListener("pointerlockchange", () => {
         document.pointerLockElement === renderer.domElement;
 
     crosshair.style.display = locked ? "block" : "none";
-
-    if (locked) {
-        startScreen.style.display = "none";
-    } else if (gameStarted) {
-        startScreen.style.display = "flex";
-        startButton.textContent = "WEITER SPIELEN";
-    }
 });
 
 // ============================================================
 // ANIMATION
 // ============================================================
 
-let lastTime = 0;
+let lastTime = performance.now();
 
 let visibilityTimer = 0;
 let activationTimer = 0;
@@ -2344,14 +2045,11 @@ function animate(time) {
     lastTime = time;
     animationTime += dt;
 
-    // Spieler
-
     if (locked) {
         updatePlayer(dt);
     }
 
     // Physik mit festem Zeitschritt
-
     physicsAccumulator += dt;
 
     while (physicsAccumulator >= 1 / 60) {
@@ -2361,8 +2059,7 @@ function animate(time) {
         physicsAccumulator -= 1 / 60;
     }
 
-    // Chunks aktualisieren
-
+    // Chunk-Streaming
     if (locked) {
         visibilityTimer += dt;
         activationTimer += dt;
@@ -2378,12 +2075,9 @@ function animate(time) {
         }
     }
 
-    // Partikel
-
     updateParticles(dt);
 
-    // Förderband
-
+    // Förderband bewegen
     for (const stripe of beltStripes) {
         stripe.position.z += dt * 2.7;
 
@@ -2396,13 +2090,10 @@ function animate(time) {
         roller.rotation.x += dt * 3;
     }
 
-    // Einzahlanimation
-
     updateDepositAnimation(dt);
     updateBeltCoins(dt);
 
     // Abgelegte Münzen synchronisieren
-
     for (const coin of droppedCoins) {
         const position = coin.body.translation();
         const rotation = coin.body.rotation();
@@ -2445,11 +2136,6 @@ window.addEventListener("resize", () => {
 
 window.addEventListener("error", event => {
     console.error("Spiel-Fehler:", event.error);
-
-    if (!gameStarted) {
-        startScreen.style.display = "flex";
-        startButton.textContent = "SPIELFEHLER";
-    }
 });
 
 window.addEventListener("unhandledrejection", event => {
@@ -2468,15 +2154,14 @@ updateVisibility();
 
 renderer.render(scene, camera);
 
-// Spielschleife beginnt ERST nach Klick auf SPIEL STARTEN.
+// Animation sofort starten
+requestAnimationFrame(animate);
 
-startScreen.style.display = "flex";
-startButton.style.pointerEvents = "auto";
-startButton.disabled = false;
-
-console.log("ONE MILLION COINS geladen.");
-console.log("Münzen insgesamt:", TOTAL_COINS.toLocaleString("de-DE"));
-console.log("Startbildschirm bereit.");
+console.log("ONE MILLION COINS gestartet!");
+console.log(
+    "Münzen insgesamt:",
+    TOTAL_COINS.toLocaleString("de-DE")
+);
 
 // ============================================================
 // DEBUG
@@ -2491,6 +2176,5 @@ window.oneMillionCoins = {
     chunks,
     money: () => money,
     held: getHeldCoins,
-    total: TOTAL_COINS,
-    start: startGame
+    total: TOTAL_COINS
 };

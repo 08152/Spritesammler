@@ -3,20 +3,23 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 
 /*
 =========================================================
- HEBEN.JS – MÜNZEN UND INVENTAR
+ HEBEN.JS – MÜNZEN, INSTANCED MESHES UND INVENTAR
 =========================================================
 
  LINKSKLICK:
- Münze aufheben und ins Inventar legen.
+ Eine Münze aufheben.
 
  Q:
- Eine Münze aus dem Inventar droppen.
- Die Münze fällt mit Rapier-Physik herunter.
+ Eine Münze droppen.
 
  E:
- Wird NICHT hier behandelt.
- E ist für die Zählmaschine reserviert.
+ Für die Zählmaschine reserviert.
 
+ UNTERSTÜTZT:
+ - Normale THREE.Mesh-Münzen
+ - Münz-Gruppen
+ - THREE.InstancedMesh mit sehr vielen Münzen
+ - Rapier-Physik
 =========================================================
 */
 
@@ -37,19 +40,26 @@ export class CoinPickupSystem {
             dropSpeed: 2.0,
             dropSpin: 3.5,
 
+            coinRadius: 0.18,
+            coinThickness: 0.035,
+
             onPickup: null,
             onDrop: null,
             onInventoryChange: null,
+            onInstanceRemoved: null,
 
             ...options
         };
 
         this.raycaster = new THREE.Raycaster();
-
         this.raycaster.far = this.options.maxDistance;
 
         this.coins = new Map();
 
+        // Registrierte InstancedMeshes
+        this.instancedMeshes = new Map();
+
+        // Inventar
         this.inventory = [];
 
         this.totalCollected = 0;
@@ -58,8 +68,15 @@ export class CoinPickupSystem {
 
         this.targetCoin = null;
 
-        this.createTarget();
+        this.tempMatrix = new THREE.Matrix4();
+        this.tempWorldMatrix = new THREE.Matrix4();
 
+        this.tempPosition = new THREE.Vector3();
+        this.tempQuaternion = new THREE.Quaternion();
+        this.tempScale = new THREE.Vector3();
+        this.tempColor = new THREE.Color();
+
+        this.createTarget();
     }
 
     // =====================================================
@@ -103,14 +120,13 @@ export class CoinPickupSystem {
         this.target.renderOrder = 1000;
 
         this.camera.add(this.target);
-
     }
 
     // =====================================================
-    // MÜNZE REGISTRIEREN
+    // NORMALE MÜNZE REGISTRIEREN
     // =====================================================
 
-    registerCoin(mesh, physicsCoin = null, value = 1) {
+    registerCoin(mesh, physicsCoin = null, value = 1, options = {}) {
 
         if (!mesh) return null;
 
@@ -119,6 +135,8 @@ export class CoinPickupSystem {
         }
 
         const coin = {
+
+            type: "normal",
 
             mesh,
 
@@ -132,24 +150,122 @@ export class CoinPickupSystem {
 
             originalScale: mesh.scale.clone(),
 
-            originalParent: mesh.parent
+            physicsOptions: {
+                radius: options.radius ?? this.options.coinRadius,
+                thickness: options.thickness ?? this.options.coinThickness,
+                density: options.density ?? 2.5,
+                friction: options.friction ?? 0.85,
+                restitution: options.restitution ?? 0.16
+            }
 
         };
 
         mesh.userData.isPickupCoin = true;
-
         mesh.userData.pickupData = coin;
-
         mesh.userData.coinValue = value;
 
         this.coins.set(mesh.uuid, coin);
 
         return coin;
-
     }
 
     // =====================================================
-    // MÜNZE ABMELDEN
+    // INSTANCED MESH REGISTRIEREN
+    // =====================================================
+
+    /*
+       Beispiel:
+
+       pickup.registerInstancedMesh(coinMesh, {
+           valuePerCoin: 1,
+           radius: 0.18,
+           thickness: 0.035
+       });
+
+       Optional:
+       values: [1, 1, 5, 10, ...]
+    */
+
+    registerInstancedMesh(mesh, options = {}) {
+
+        if (!mesh || !mesh.isInstancedMesh) {
+            console.warn("registerInstancedMesh benötigt ein THREE.InstancedMesh.");
+            return null;
+        }
+
+        if (this.instancedMeshes.has(mesh.uuid)) {
+            return this.instancedMeshes.get(mesh.uuid);
+        }
+
+        const record = {
+
+            mesh,
+
+            count: mesh.count,
+
+            instances: [],
+
+            options: {
+
+                valuePerCoin: options.valuePerCoin ?? 1,
+
+                values: options.values ?? null,
+
+                radius: options.radius ?? this.options.coinRadius,
+
+                thickness: options.thickness ?? this.options.coinThickness,
+
+                density: options.density ?? 2.5,
+
+                friction: options.friction ?? 0.85,
+
+                restitution: options.restitution ?? 0.16,
+
+                onInstanceRemoved: options.onInstanceRemoved ?? null
+
+            }
+
+        };
+
+        for (let i = 0; i < mesh.count; i++) {
+
+            record.instances.push({
+
+                value: record.options.values?.[i] ??
+                    record.options.valuePerCoin,
+
+                available: true
+
+            });
+
+        }
+
+        mesh.userData.isPickupInstancedMesh = true;
+
+        this.instancedMeshes.set(mesh.uuid, record);
+
+        return record;
+    }
+
+    // =====================================================
+    // INSTANCED MESH ABMELDEN
+    // =====================================================
+
+    unregisterInstancedMesh(mesh) {
+
+        if (!mesh) return;
+
+        const record = this.instancedMeshes.get(mesh.uuid);
+
+        if (!record) return;
+
+        delete mesh.userData.isPickupInstancedMesh;
+
+        this.instancedMeshes.delete(mesh.uuid);
+    }
+
+    // =====================================================
+    // NORMALE MÜNZE ABMELDEN
     // =====================================================
 
     unregisterCoin(mesh) {
@@ -165,7 +281,193 @@ export class CoinPickupSystem {
         mesh.userData.isPickupCoin = false;
 
         delete mesh.userData.pickupData;
+    }
 
+    // =====================================================
+    // INSTANCED MESH: WELTTRANSFORM ERMITTELN
+    // =====================================================
+
+    getInstanceTransform(record, instanceId) {
+
+        const mesh = record.mesh;
+
+        if (
+            !mesh ||
+            instanceId < 0 ||
+            instanceId >= record.count
+        ) {
+            return null;
+        }
+
+        mesh.updateWorldMatrix(true, false);
+
+        mesh.getMatrixAt(instanceId, this.tempMatrix);
+
+        this.tempWorldMatrix.multiplyMatrices(
+            mesh.matrixWorld,
+            this.tempMatrix
+        );
+
+        this.tempWorldMatrix.decompose(
+            this.tempPosition,
+            this.tempQuaternion,
+            this.tempScale
+        );
+
+        return {
+
+            position: this.tempPosition.clone(),
+
+            quaternion: this.tempQuaternion.clone(),
+
+            scale: this.tempScale.clone()
+
+        };
+    }
+
+    // =====================================================
+    // INSTANCED MESH: EINZELNE MÜNZE ENTFERNEN
+    // =====================================================
+
+    removeInstance(record, instanceId) {
+
+        if (!record) return false;
+
+        if (
+            instanceId < 0 ||
+            instanceId >= record.count
+        ) {
+            return false;
+        }
+
+        const mesh = record.mesh;
+
+        const lastIndex = record.count - 1;
+
+        const removedData = record.instances[instanceId];
+
+        let movedData = null;
+
+        // Letzte Instanz auf die entfernte Position verschieben.
+        if (instanceId !== lastIndex) {
+
+            mesh.getMatrixAt(lastIndex, this.tempMatrix);
+
+            mesh.setMatrixAt(instanceId, this.tempMatrix);
+
+            if (mesh.instanceColor) {
+
+                mesh.getColorAt(lastIndex, this.tempColor);
+
+                mesh.setColorAt(instanceId, this.tempColor);
+
+            }
+
+            movedData = record.instances[lastIndex];
+
+            record.instances[instanceId] = movedData;
+        }
+
+        record.instances.pop();
+
+        record.count--;
+
+        mesh.count = record.count;
+
+        mesh.instanceMatrix.needsUpdate = true;
+
+        if (mesh.instanceColor) {
+            mesh.instanceColor.needsUpdate = true;
+        }
+
+        mesh.computeBoundingSphere();
+
+        const callbackData = {
+
+            mesh,
+
+            removedIndex: instanceId,
+
+            movedFromIndex: lastIndex,
+
+            removedData,
+
+            movedData,
+
+            newCount: record.count
+
+        };
+
+        if (typeof record.options.onInstanceRemoved === "function") {
+
+            record.options.onInstanceRemoved(callbackData);
+
+        }
+
+        if (typeof this.options.onInstanceRemoved === "function") {
+
+            this.options.onInstanceRemoved(callbackData);
+
+        }
+
+        return true;
+    }
+
+    // =====================================================
+    // INSTANCED MESH: EINZELNE MÜNZE ALS MESH ERSTELLEN
+    // =====================================================
+
+    createIndividualCoin(record, instanceId, transform) {
+
+        const source = record.mesh;
+
+        let material;
+
+        if (Array.isArray(source.material)) {
+
+            material = source.material.map(m => m.clone());
+
+        } else {
+
+            material = source.material.clone();
+
+        }
+
+        // Individuelle Instanzfarbe übernehmen.
+        if (source.instanceColor) {
+
+            source.getColorAt(instanceId, this.tempColor);
+
+            if (Array.isArray(material)) {
+
+                for (const mat of material) {
+                    if (mat.color) mat.color.multiply(this.tempColor);
+                }
+
+            } else if (material.color) {
+
+                material.color.multiply(this.tempColor);
+
+            }
+        }
+
+        const mesh = new THREE.Mesh(
+            source.geometry,
+            material
+        );
+
+        mesh.position.copy(transform.position);
+
+        mesh.quaternion.copy(transform.quaternion);
+
+        mesh.scale.copy(transform.scale);
+
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        mesh.userData.isPickupCoin = true;
+
+        return mesh;
     }
 
     // =====================================================
@@ -183,16 +485,24 @@ export class CoinPickupSystem {
 
         const objects = [];
 
+        // Normale Münzen.
         for (const coin of this.coins.values()) {
 
-            if (!coin.available) continue;
-
-            if (coin.collected) continue;
+            if (!coin.available || coin.collected) continue;
 
             if (!coin.mesh.visible) continue;
 
             objects.push(coin.mesh);
+        }
 
+        // InstancedMeshes.
+        for (const record of this.instancedMeshes.values()) {
+
+            if (!record.mesh.visible) continue;
+
+            if (record.count <= 0) continue;
+
+            objects.push(record.mesh);
         }
 
         const intersections = this.raycaster.intersectObjects(
@@ -202,10 +512,48 @@ export class CoinPickupSystem {
 
         for (const hit of intersections) {
 
+            if (hit.distance > this.options.maxDistance) continue;
+
+            // Treffer auf einer InstancedMesh-Münze.
+            if (
+                hit.object.isInstancedMesh &&
+                hit.instanceId !== undefined
+            ) {
+
+                const record = this.instancedMeshes.get(
+                    hit.object.uuid
+                );
+
+                if (!record) continue;
+
+                const instance = record.instances[hit.instanceId];
+
+                if (!instance || !instance.available) continue;
+
+                return {
+
+                    type: "instance",
+
+                    record,
+
+                    instanceId: hit.instanceId,
+
+                    instance,
+
+                    distance: hit.distance,
+
+                    point: hit.point
+
+                };
+            }
+
+            // Treffer auf einer normalen Münze.
             let object = hit.object;
 
             while (object && !object.userData.pickupData) {
+
                 object = object.parent;
+
             }
 
             if (!object) continue;
@@ -214,18 +562,20 @@ export class CoinPickupSystem {
 
             if (!coin || !coin.available) continue;
 
-            if (hit.distance > this.options.maxDistance) continue;
-
             return {
-                coin,
-                distance: hit.distance,
-                point: hit.point
-            };
 
+                type: "normal",
+
+                coin,
+
+                distance: hit.distance,
+
+                point: hit.point
+
+            };
         }
 
         return null;
-
     }
 
     // =====================================================
@@ -240,27 +590,89 @@ export class CoinPickupSystem {
 
         if (!target) return false;
 
-        const coin = target.coin;
+        let coin;
 
-        coin.available = false;
+        // -------------------------------------------------
+        // INSTANCED MESH
+        // -------------------------------------------------
 
-        coin.collected = true;
+        if (target.type === "instance") {
 
-        // Physikkörper einfrieren
-        if (this.physics && coin.physicsCoin) {
+            const transform = this.getInstanceTransform(
+                target.record,
+                target.instanceId
+            );
 
-            this.physics.freezeCoin(coin.physicsCoin);
+            if (!transform) return false;
 
+            const individualMesh = this.createIndividualCoin(
+                target.record,
+                target.instanceId,
+                transform
+            );
+
+            coin = {
+
+                type: "instance",
+
+                mesh: individualMesh,
+
+                physicsCoin: null,
+
+                value: target.instance.value,
+
+                available: false,
+
+                collected: true,
+
+                originalScale: transform.scale.clone(),
+
+                physicsOptions: {
+
+                    radius: target.record.options.radius,
+                    thickness: target.record.options.thickness,
+                    density: target.record.options.density,
+                    friction: target.record.options.friction,
+                    restitution: target.record.options.restitution
+
+                }
+
+            };
+
+            // Die einzelne Münze aus dem Stapel entfernen.
+            const success = this.removeInstance(
+                target.record,
+                target.instanceId
+            );
+
+            if (!success) return false;
         }
 
-        // Münze aus der sichtbaren Welt entfernen
-        if (coin.mesh.parent) {
+        // -------------------------------------------------
+        // NORMALE MÜNZE
+        // -------------------------------------------------
 
-            coin.mesh.parent.remove(coin.mesh);
+        else {
 
+            coin = target.coin;
+
+            coin.available = false;
+            coin.collected = true;
+
+            if (this.physics && coin.physicsCoin) {
+
+                this.physics.freezeCoin(coin.physicsCoin);
+
+            }
+
+            if (coin.mesh.parent) {
+
+                coin.mesh.parent.remove(coin.mesh);
+
+            }
         }
 
-        // Münze im Inventar speichern
+        // Inventar.
         this.inventory.push(coin);
 
         this.totalCollected++;
@@ -274,11 +686,10 @@ export class CoinPickupSystem {
         }
 
         return true;
-
     }
 
     // =====================================================
-    // EINE MÜNZE AUS DEM INVENTAR DROPPEN
+    // EINE MÜNZE DROPPEN
     // =====================================================
 
     dropCoin() {
@@ -287,18 +698,18 @@ export class CoinPickupSystem {
 
         if (this.inventory.length === 0) return false;
 
-        // Erste Inventarmünze nehmen
         const coin = this.inventory.shift();
 
         const mesh = coin.mesh;
 
-        if (!mesh) return false;
+        if (!mesh) {
 
-        coin.collected = false;
+            this.updateInventory();
 
-        coin.available = true;
+            return false;
+        }
 
-        // Position vor der Kamera berechnen
+        // Kamerarichtung.
         const direction = new THREE.Vector3();
 
         this.camera.getWorldDirection(direction);
@@ -316,7 +727,7 @@ export class CoinPickupSystem {
 
         dropPosition.y += this.options.dropHeight;
 
-        // Münze wieder in die Welt setzen
+        // Mesh wieder in die Welt setzen.
         if (mesh.parent) {
 
             mesh.parent.remove(mesh);
@@ -329,7 +740,6 @@ export class CoinPickupSystem {
 
         mesh.scale.copy(coin.originalScale);
 
-        // Münze leicht kippen
         const randomTilt = new THREE.Euler(
             Math.random() * 0.5,
             Math.random() * Math.PI * 2,
@@ -338,28 +748,37 @@ export class CoinPickupSystem {
 
         mesh.quaternion.setFromEuler(randomTilt);
 
-        // Physikkörper reaktivieren
+        // Falls noch kein Physikkörper existiert,
+        // einen neuen erzeugen.
+        if (this.physics && !coin.physicsCoin) {
+
+            coin.physicsCoin = this.physics.createCoin(
+                {
+                    x: dropPosition.x,
+                    y: dropPosition.y,
+                    z: dropPosition.z
+                },
+                coin.physicsOptions
+            );
+
+        }
+
+        // Physik aktivieren.
         if (this.physics && coin.physicsCoin) {
 
             const body = coin.physicsCoin.body;
 
+            this.physics.resumeCoin(coin.physicsCoin);
+
             if (body) {
 
-                // Gespeicherten Physikzustand wieder aktivieren
-                this.physics.resumeCoin(coin.physicsCoin);
-
-                // Position und Rotation setzen
                 body.setTranslation({
+
                     x: dropPosition.x,
                     y: dropPosition.y,
                     z: dropPosition.z
-                }, true);
 
-                /*
-                 Rapier-Zylinder haben ihre Achse auf Y.
-                 Die visuelle Münze ist in coin.js um X gedreht.
-                 Daher wird die Rotation entsprechend korrigiert.
-                */
+                }, true);
 
                 const correction = new THREE.Quaternion();
 
@@ -373,33 +792,42 @@ export class CoinPickupSystem {
                 physicsRotation.multiply(correction);
 
                 body.setRotation({
+
                     x: physicsRotation.x,
                     y: physicsRotation.y,
                     z: physicsRotation.z,
                     w: physicsRotation.w
+
                 }, true);
 
-                // Fallgeschwindigkeit
                 body.setLinvel({
+
                     x: direction.x * this.options.dropSpeed,
                     y: -0.8,
                     z: direction.z * this.options.dropSpeed
+
                 }, true);
 
-                // Drehbewegung
                 body.setAngvel({
+
                     x: (Math.random() - 0.5) * this.options.dropSpin,
                     y: (Math.random() - 0.5) * this.options.dropSpin,
                     z: (Math.random() - 0.5) * this.options.dropSpin
+
                 }, true);
 
                 body.wakeUp();
-
             }
-
         }
 
-        // Wieder als aufhebbare Münze registriert lassen
+        coin.collected = false;
+        coin.available = true;
+
+        // Wieder als normale Münze registrieren.
+        mesh.userData.isPickupCoin = true;
+        mesh.userData.pickupData = coin;
+        mesh.userData.coinValue = coin.value;
+
         this.coins.set(mesh.uuid, coin);
 
         this.updateInventory();
@@ -411,11 +839,10 @@ export class CoinPickupSystem {
         }
 
         return true;
-
     }
 
     // =====================================================
-    // INVENTAR AN DIE ZÄHLMASCHINE ÜBERGEBEN
+    // MÜNZEN AN DIE MASCHINE ÜBERGEBEN
     // =====================================================
 
     takeCoinsForMachine(amount = null) {
@@ -432,10 +859,9 @@ export class CoinPickupSystem {
         for (const coin of coins) {
 
             coin.collected = true;
-
             coin.available = false;
 
-            if (coin.mesh.parent) {
+            if (coin.mesh?.parent) {
 
                 coin.mesh.parent.remove(coin.mesh);
 
@@ -447,24 +873,40 @@ export class CoinPickupSystem {
 
             }
 
-            this.coins.delete(coin.mesh.uuid);
+            if (coin.mesh) {
 
+                this.coins.delete(coin.mesh.uuid);
+
+                delete coin.mesh.userData.pickupData;
+            }
+
+            // Materialien der individuellen Instanzkopie freigeben.
+            if (coin.type === "instance" && coin.mesh?.material) {
+
+                if (Array.isArray(coin.mesh.material)) {
+
+                    coin.mesh.material.forEach(m => m.dispose());
+
+                } else {
+
+                    coin.mesh.material.dispose();
+
+                }
+            }
         }
 
         this.updateInventory();
 
         return coins;
-
     }
 
     // =====================================================
-    // INVENTARWERT
+    // INVENTAR
     // =====================================================
 
     getInventoryCount() {
 
         return this.inventory.length;
-
     }
 
     getInventoryValue() {
@@ -473,18 +915,12 @@ export class CoinPickupSystem {
             (total, coin) => total + coin.value,
             0
         );
-
     }
 
     getCollectedCount() {
 
         return this.totalCollected;
-
     }
-
-    // =====================================================
-    // INVENTAR AKTUALISIEREN
-    // =====================================================
 
     updateInventory() {
 
@@ -497,23 +933,20 @@ export class CoinPickupSystem {
                 value: this.getInventoryValue()
 
             });
-
         }
-
     }
 
     // =====================================================
-    // ZIELANZEIGE AKTUALISIEREN
+    // ZIELANZEIGE
     // =====================================================
 
     updateTarget() {
 
         const target = this.findTargetCoin();
 
-        this.targetCoin = target ? target.coin : null;
+        this.targetCoin = target;
 
         this.target.visible = !!target;
-
     }
 
     // =====================================================
@@ -525,7 +958,6 @@ export class CoinPickupSystem {
         if (!this.enabled) return;
 
         this.updateTarget();
-
     }
 
     // =====================================================
@@ -539,7 +971,6 @@ export class CoinPickupSystem {
         if (event.button !== 0) return false;
 
         return this.pickupCoin();
-
     }
 
     // =====================================================
@@ -552,17 +983,14 @@ export class CoinPickupSystem {
 
         if (event.repeat) return false;
 
-        if (event.key.toLowerCase() === "q") {
+        if (event.key?.toLowerCase() === "q") {
 
             return this.dropCoin();
-
         }
 
-        // E wird bewusst nicht behandelt.
-        // E gehört zur Zählmaschine.
+        // E bleibt für die Zählmaschine reserviert.
 
         return false;
-
     }
 
     // =====================================================
@@ -576,9 +1004,7 @@ export class CoinPickupSystem {
         if (!enabled) {
 
             this.target.visible = false;
-
         }
-
     }
 
     // =====================================================
@@ -606,21 +1032,17 @@ export class CoinPickupSystem {
                     } else {
 
                         object.material.dispose();
-
                     }
-
                 }
-
             }
-
         });
 
         this.coins.clear();
 
+        this.instancedMeshes.clear();
+
         this.inventory = [];
-
     }
-
 }
 
 // =========================================================
@@ -640,5 +1062,4 @@ export function createPickupSystem(
         physics,
         options
     );
-
 }

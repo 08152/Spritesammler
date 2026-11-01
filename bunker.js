@@ -2,20 +2,31 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
 
 /*
-=========================================================
- BUNKER.JS – REALISTISCHER BETONBUNKER
-=========================================================
+============================================================
+ BUNKER.JS – HIGH DETAIL UNDERGROUND BUNKER
+============================================================
 
- 7 Etagen
- 24 x 24 Meter
- 8 Meter Etagenhöhe
- Massive Betonwände
- Türöffnungen in der Vorderwand
- Stützpfeiler
- Physik-Kollisionen mit Rapier
+ FEATURES:
+ - 7 Etagen
+ - 24 x 24 Meter Grundfläche
+ - 8 Meter Etagenhöhe
+ - Realistische Betontexturen
+ - Sichtbare Betonplatten und Fugen
+ - Massive Stützpfeiler
+ - Verstärkte Türöffnungen
+ - Deckenverstärkungen
+ - Bodenfugen
+ - Wandverstärkungen
+ - Rapier-Kollisionen
 
- Diese Datei baut ausschließlich den Bunker.
-=========================================================
+ NICHT ENTHALTEN:
+ - Treppen
+ - Beleuchtung
+ - Münzen
+ - Zählmaschine
+ - Spieler
+
+============================================================
 */
 
 export class BunkerSystem {
@@ -45,9 +56,28 @@ export class BunkerSystem {
 
             doorHeight: 3.4,
 
-            pillarSize: 0.55,
+            pillarSize: 0.65,
+
+            pillarPositions: [
+                [-8, -8],
+                [0, -8],
+                [8, -8],
+                [-8, 0],
+                [0, 0],
+                [8, 0],
+                [-8, 8],
+                [8, 8]
+            ],
 
             createPhysics: true,
+
+            createWallDetails: true,
+
+            createFloorDetails: true,
+
+            createCeilingDetails: true,
+
+            createPillarDetails: true,
 
             ...options
 
@@ -69,49 +99,233 @@ export class BunkerSystem {
 
     }
 
-    // =====================================================
-    // MATERIALIEN
-    // =====================================================
+    // ========================================================
+    // PROZEDURALE BETONTEXTUR
+    // ========================================================
 
-    createMaterials() {
+    createConcreteTexture() {
 
-        this.materials.concrete = new THREE.MeshStandardMaterial({
+        const canvas = document.createElement("canvas");
 
-            color: 0x777873,
+        canvas.width = 512;
+        canvas.height = 512;
 
-            roughness: 0.96,
+        const context = canvas.getContext("2d");
 
-            metalness: 0.0
+        const image = context.createImageData(512, 512);
 
-        });
+        let seed = 123456;
 
-        this.materials.floor = new THREE.MeshStandardMaterial({
+        const random = () => {
 
-            color: 0x666963,
+            seed = (seed * 1664525 + 1013904223) >>> 0;
 
-            roughness: 0.98,
+            return seed / 4294967296;
 
-            metalness: 0.0
+        };
 
-        });
+        for (let i = 0; i < image.data.length; i += 4) {
 
-        this.materials.pillar = new THREE.MeshStandardMaterial({
+            const noise = (random() - 0.5) * 25;
 
-            color: 0x858680,
+            const base = 125 + noise;
 
-            roughness: 0.95,
+            image.data[i] = base;
+            image.data[i + 1] = base;
+            image.data[i + 2] = base - 2;
 
-            metalness: 0.0
+            image.data[i + 3] = 255;
 
-        });
+        }
+
+        context.putImageData(image, 0, 0);
+
+        // Leichte dunkle Betonflecken
+        for (let i = 0; i < 100; i++) {
+
+            const x = random() * 512;
+            const y = random() * 512;
+
+            const radius = 3 + random() * 22;
+
+            context.fillStyle =
+                `rgba(35, 38, 35, ${0.015 + random() * 0.045})`;
+
+            context.beginPath();
+
+            context.arc(
+                x,
+                y,
+                radius,
+                0,
+                Math.PI * 2
+            );
+
+            context.fill();
+
+        }
+
+        // Kleine Oberflächenkratzer
+        for (let i = 0; i < 180; i++) {
+
+            context.strokeStyle =
+                `rgba(25, 27, 25, ${random() * 0.12})`;
+
+            context.lineWidth = 0.5 + random() * 1.5;
+
+            context.beginPath();
+
+            const x = random() * 512;
+            const y = random() * 512;
+
+            context.moveTo(x, y);
+
+            context.lineTo(
+                x + (random() - 0.5) * 25,
+                y + (random() - 0.5) * 25
+            );
+
+            context.stroke();
+
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+
+        texture.colorSpace = THREE.SRGBColorSpace;
+
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+
+        texture.repeat.set(2, 2);
+
+        texture.anisotropy = 8;
+
+        return texture;
 
     }
 
-    // =====================================================
-    // BAUTEIL ERSTELLEN
-    // =====================================================
+    // ========================================================
+    // MATERIALIEN
+    // ========================================================
 
-    createPart(name, position, size, material) {
+    createMaterials() {
+
+        const concreteTexture = this.createConcreteTexture();
+
+        this.materials.concrete =
+            new THREE.MeshStandardMaterial({
+
+                color: 0xb0b0aa,
+
+                map: concreteTexture,
+
+                roughness: 0.96,
+
+                metalness: 0.0,
+
+                bumpMap: concreteTexture,
+
+                bumpScale: 0.035
+
+            });
+
+        this.materials.floor =
+            new THREE.MeshStandardMaterial({
+
+                color: 0x777973,
+
+                map: concreteTexture,
+
+                roughness: 0.98,
+
+                metalness: 0.0,
+
+                bumpMap: concreteTexture,
+
+                bumpScale: 0.025
+
+            });
+
+        this.materials.pillar =
+            new THREE.MeshStandardMaterial({
+
+                color: 0xa0a09a,
+
+                map: concreteTexture,
+
+                roughness: 0.96,
+
+                metalness: 0.0,
+
+                bumpMap: concreteTexture,
+
+                bumpScale: 0.035
+
+            });
+
+        this.materials.darkConcrete =
+            new THREE.MeshStandardMaterial({
+
+                color: 0x41433f,
+
+                roughness: 0.96
+
+            });
+
+        this.materials.joint =
+            new THREE.MeshStandardMaterial({
+
+                color: 0x353732,
+
+                roughness: 1.0
+
+            });
+
+        this.materials.reinforcement =
+            new THREE.MeshStandardMaterial({
+
+                color: 0x555752,
+
+                roughness: 0.85,
+
+                metalness: 0.05
+
+            });
+
+        this.materials.warning =
+            new THREE.MeshStandardMaterial({
+
+                color: 0xb28a35,
+
+                roughness: 0.85
+
+            });
+
+    }
+
+    // ========================================================
+    // BAUTEIL ERSTELLEN
+    // ========================================================
+
+    createPart(
+        name,
+        position,
+        size,
+        material,
+        options = {}
+    ) {
+
+        const {
+
+            solid = false,
+
+            floorIndex = -1,
+
+            castShadow = true,
+
+            receiveShadow = true
+
+        } = options;
 
         const geometry = new THREE.BoxGeometry(
             size.x,
@@ -132,13 +346,17 @@ export class BunkerSystem {
             position.z
         );
 
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        mesh.castShadow = castShadow;
+
+        mesh.receiveShadow = receiveShadow;
+
+        mesh.userData.floorIndex = floorIndex;
 
         this.group.add(mesh);
 
-        // Physik-Kollision erstellen
+        // Nur tragende Bauteile erhalten Physik.
         if (
+            solid &&
             this.options.createPhysics &&
             this.physics
         ) {
@@ -171,9 +389,9 @@ export class BunkerSystem {
 
     }
 
-    // =====================================================
+    // ========================================================
     // GESAMTEN BUNKER BAUEN
-    // =====================================================
+    // ========================================================
 
     build() {
 
@@ -192,6 +410,14 @@ export class BunkerSystem {
 
             this.buildPillars(floorY, floor);
 
+            this.buildReinforcements(floorY, floor);
+
+            if (this.options.createCeilingDetails) {
+
+                this.buildCeiling(floorY, floor);
+
+            }
+
         }
 
         // Dach über der obersten Etage
@@ -201,20 +427,19 @@ export class BunkerSystem {
 
         this.createFloorSlab(
             roofY,
-            "Bunker_Dach"
+            "Bunker_Dach",
+            this.options.floorCount
         );
 
     }
 
-    // =====================================================
-    // BODENPLATTE
-    // =====================================================
+    // ========================================================
+    // BODENPLATTEN
+    // ========================================================
 
-    createFloorSlab(floorY, name) {
+    createFloorSlab(floorY, name, floorIndex) {
 
-        const centerY =
-            floorY -
-            this.options.floorThickness / 2;
+        const thickness = this.options.floorThickness;
 
         return this.createPart(
 
@@ -222,17 +447,22 @@ export class BunkerSystem {
 
             {
                 x: 0,
-                y: centerY,
+                y: floorY - thickness / 2,
                 z: 0
             },
 
             {
                 x: this.options.width,
-                y: this.options.floorThickness,
+                y: thickness,
                 z: this.options.depth
             },
 
-            this.materials.floor
+            this.materials.floor,
+
+            {
+                solid: true,
+                floorIndex
+            }
 
         );
 
@@ -244,32 +474,126 @@ export class BunkerSystem {
 
             floorY,
 
-            "Bunker_Boden_Etage_" + (floorIndex + 1)
+            "Bunker_Boden_Etage_" + (floorIndex + 1),
+
+            floorIndex
 
         );
 
+        if (this.options.createFloorDetails) {
+
+            this.buildFloorJoints(
+                floorY,
+                floorIndex
+            );
+
+        }
+
     }
 
-    // =====================================================
+    // ========================================================
+    // BODENFUGEN
+    // ========================================================
+
+    buildFloorJoints(floorY, floorIndex) {
+
+        const size = this.options.width;
+
+        const half = size / 2;
+
+        const spacing = 6;
+
+        const lineThickness = 0.025;
+
+        const lineY = floorY + 0.006;
+
+        for (
+            let x = -half + spacing;
+            x < half;
+            x += spacing
+        ) {
+
+            this.createPart(
+
+                "Bodenfuge_X_" + floorIndex + "_" + x,
+
+                {
+                    x,
+                    y: lineY,
+                    z: 0
+                },
+
+                {
+                    x: lineThickness,
+                    y: 0.008,
+                    z: size
+                },
+
+                this.materials.joint,
+
+                {
+                    floorIndex
+                }
+
+            );
+
+        }
+
+        for (
+            let z = -half + spacing;
+            z < half;
+            z += spacing
+        ) {
+
+            this.createPart(
+
+                "Bodenfuge_Z_" + floorIndex + "_" + z,
+
+                {
+                    x: 0,
+                    y: lineY,
+                    z
+                },
+
+                {
+                    x: size,
+                    y: 0.008,
+                    z: lineThickness
+                },
+
+                this.materials.joint,
+
+                {
+                    floorIndex
+                }
+
+            );
+
+        }
+
+    }
+
+    // ========================================================
     // WÄNDE
-    // =====================================================
+    // ========================================================
 
     buildWalls(floorY, floorIndex) {
 
         const width = this.options.width;
+
         const depth = this.options.depth;
 
         const thickness = this.options.wallThickness;
+
         const height = this.options.wallHeight;
 
         const halfWidth = width / 2;
+
         const halfDepth = depth / 2;
 
         const wallY = floorY + height / 2;
 
-        const wallMaterial = this.materials.concrete;
-
-        // Linke Wand
+        // Linke Außenwand
         this.createPart(
 
             "Bunker_Wand_Links_" + floorIndex,
@@ -286,11 +610,16 @@ export class BunkerSystem {
                 z: depth
             },
 
-            wallMaterial
+            this.materials.concrete,
+
+            {
+                solid: true,
+                floorIndex
+            }
 
         );
 
-        // Rechte Wand
+        // Rechte Außenwand
         this.createPart(
 
             "Bunker_Wand_Rechts_" + floorIndex,
@@ -307,11 +636,16 @@ export class BunkerSystem {
                 z: depth
             },
 
-            wallMaterial
+            this.materials.concrete,
+
+            {
+                solid: true,
+                floorIndex
+            }
 
         );
 
-        // Hintere Wand
+        // Hintere Außenwand
         this.createPart(
 
             "Bunker_Wand_Hinten_" + floorIndex,
@@ -328,21 +662,29 @@ export class BunkerSystem {
                 z: thickness
             },
 
-            wallMaterial
+            this.materials.concrete,
+
+            {
+                solid: true,
+                floorIndex
+            }
 
         );
 
         // Vorderwand mit Türöffnung
-        this.buildFrontWall(
-            floorY,
-            floorIndex
-        );
+        this.buildFrontWall(floorY, floorIndex);
+
+        if (this.options.createWallDetails) {
+
+            this.buildWallDetails(floorY, floorIndex);
+
+        }
 
     }
 
-    // =====================================================
+    // ========================================================
     // VORDERWAND MIT TÜRÖFFNUNG
-    // =====================================================
+    // ========================================================
 
     buildFrontWall(floorY, floorIndex) {
 
@@ -370,7 +712,7 @@ export class BunkerSystem {
         const sideWidth =
             halfWidth - halfDoor;
 
-        // Linker Teil der Vorderwand
+        // Linker Wandabschnitt
         this.createPart(
 
             "Bunker_Vorderwand_Links_" + floorIndex,
@@ -387,11 +729,16 @@ export class BunkerSystem {
                 z: thickness
             },
 
-            this.materials.concrete
+            this.materials.concrete,
+
+            {
+                solid: true,
+                floorIndex
+            }
 
         );
 
-        // Rechter Teil der Vorderwand
+        // Rechter Wandabschnitt
         this.createPart(
 
             "Bunker_Vorderwand_Rechts_" + floorIndex,
@@ -408,11 +755,16 @@ export class BunkerSystem {
                 z: thickness
             },
 
-            this.materials.concrete
+            this.materials.concrete,
+
+            {
+                solid: true,
+                floorIndex
+            }
 
         );
 
-        // Wandstück über der Tür
+        // Beton über der Tür
         const upperHeight =
             height - doorHeight;
 
@@ -435,57 +787,451 @@ export class BunkerSystem {
                 z: thickness
             },
 
-            this.materials.concrete
+            this.materials.concrete,
+
+            {
+                solid: true,
+                floorIndex
+            }
+
+        );
+
+        this.buildDoorFrame(
+            floorY,
+            floorIndex,
+            frontZ
+        );
+
+    }
+
+    // ========================================================
+    // VERSTÄRKTER TÜRRAHMEN
+    // ========================================================
+
+    buildDoorFrame(floorY, floorIndex, frontZ) {
+
+        const width = this.options.doorWidth;
+
+        const height = this.options.doorHeight;
+
+        const frameWidth = 0.18;
+
+        const frameDepth = 0.12;
+
+        const frameZ = frontZ + 0.24;
+
+        // Linker Rahmen
+        this.createPart(
+
+            "Tuerrahmen_Links_" + floorIndex,
+
+            {
+                x: -width / 2,
+                y: floorY + height / 2,
+                z: frameZ
+            },
+
+            {
+                x: frameWidth,
+                y: height,
+                z: frameDepth
+            },
+
+            this.materials.reinforcement,
+
+            {
+                floorIndex
+            }
+
+        );
+
+        // Rechter Rahmen
+        this.createPart(
+
+            "Tuerrahmen_Rechts_" + floorIndex,
+
+            {
+                x: width / 2,
+                y: floorY + height / 2,
+                z: frameZ
+            },
+
+            {
+                x: frameWidth,
+                y: height,
+                z: frameDepth
+            },
+
+            this.materials.reinforcement,
+
+            {
+                floorIndex
+            }
+
+        );
+
+        // Oberer Rahmen
+        this.createPart(
+
+            "Tuerrahmen_Oben_" + floorIndex,
+
+            {
+                x: 0,
+                y: floorY + height,
+                z: frameZ
+            },
+
+            {
+                x: width + frameWidth,
+                y: frameWidth,
+                z: frameDepth
+            },
+
+            this.materials.reinforcement,
+
+            {
+                floorIndex
+            }
 
         );
 
     }
 
-    // =====================================================
+    // ========================================================
+    // WANDPLATTEN UND BETONFUGEN
+    // ========================================================
+
+    buildWallDetails(floorY, floorIndex) {
+
+        const half = this.options.width / 2;
+
+        const depth = this.options.depth;
+
+        const height = this.options.wallHeight;
+
+        const thickness = 0.025;
+
+        const wallSurface = this.options.width / 2 -
+            this.options.wallThickness - 0.015;
+
+        const spacing = 4;
+
+        // Fugen an linker und rechter Wand
+        for (
+            let z = -half + spacing;
+            z < half;
+            z += spacing
+        ) {
+
+            this.createPart(
+
+                "Wandfuge_Seite_" + floorIndex + "_" + z,
+
+                {
+                    x: -wallSurface,
+                    y: floorY + height / 2,
+                    z
+                },
+
+                {
+                    x: thickness,
+                    y: height - 0.2,
+                    z: 0.025
+                },
+
+                this.materials.joint,
+
+                {
+                    floorIndex
+                }
+
+            );
+
+            this.createPart(
+
+                "Wandfuge_Seite2_" + floorIndex + "_" + z,
+
+                {
+                    x: wallSurface,
+                    y: floorY + height / 2,
+                    z
+                },
+
+                {
+                    x: thickness,
+                    y: height - 0.2,
+                    z: 0.025
+                },
+
+                this.materials.joint,
+
+                {
+                    floorIndex
+                }
+
+            );
+
+        }
+
+        // Fugen an der Rückwand
+        const backZ =
+            -depth / 2 +
+            this.options.wallThickness +
+            0.015;
+
+        for (
+            let x = -half + spacing;
+            x < half;
+            x += spacing
+        ) {
+
+            this.createPart(
+
+                "Wandfuge_Hinten_" + floorIndex + "_" + x,
+
+                {
+                    x,
+                    y: floorY + height / 2,
+                    z: backZ
+                },
+
+                {
+                    x: 0.025,
+                    y: height - 0.2,
+                    z: thickness
+                },
+
+                this.materials.joint,
+
+                {
+                    floorIndex
+                }
+
+            );
+
+        }
+
+        // Horizontale Plattenfuge
+        const horizontalY =
+            floorY + height / 2;
+
+        this.createPart(
+
+            "Horizontale_Wandfuge_" + floorIndex,
+
+            {
+                x: 0,
+                y: horizontalY,
+                z: backZ
+            },
+
+            {
+                x: this.options.width - 0.3,
+                y: 0.025,
+                z: thickness
+            },
+
+            this.materials.joint,
+
+            {
+                floorIndex
+            }
+
+        );
+
+    }
+
+    // ========================================================
     // STÜTZPFEILER
-    // =====================================================
+    // ========================================================
 
     buildPillars(floorY, floorIndex) {
 
-        const positions = [
-
-            [-8, -8],
-            [0, -8],
-            [8, -8],
-
-            [-8, 0],
-            [0, 0],
-            [8, 0],
-
-            [-8, 8],
-            [8, 8]
-
-        ];
+        const positions = this.options.pillarPositions;
 
         const size = this.options.pillarSize;
+
+        const height = this.options.wallHeight;
 
         for (let i = 0; i < positions.length; i++) {
 
             const x = positions[i][0];
+
             const z = positions[i][1];
 
+            // Hauptpfeiler
             this.createPart(
 
                 "Bunker_Pfeiler_" + floorIndex + "_" + i,
 
                 {
                     x,
-                    y: floorY + this.options.wallHeight / 2,
+                    y: floorY + height / 2,
                     z
                 },
 
                 {
                     x: size,
-                    y: this.options.wallHeight,
+                    y: height,
                     z: size
                 },
 
-                this.materials.pillar
+                this.materials.pillar,
+
+                {
+                    solid: true,
+                    floorIndex
+                }
+
+            );
+
+            if (this.options.createPillarDetails) {
+
+                this.buildPillarDetails(
+                    x,
+                    z,
+                    floorY,
+                    floorIndex,
+                    i
+                );
+
+            }
+
+        }
+
+    }
+
+    // ========================================================
+    // PFEILERDETAILS
+    // ========================================================
+
+    buildPillarDetails(x, z, floorY, floorIndex, index) {
+
+        const size = this.options.pillarSize;
+
+        const height = this.options.wallHeight;
+
+        const baseSize = size + 0.28;
+
+        // Sockel
+        this.createPart(
+
+            "Pfeiler_Sockel_" + floorIndex + "_" + index,
+
+            {
+                x,
+                y: floorY + 0.18,
+                z
+            },
+
+            {
+                x: baseSize,
+                y: 0.36,
+                z: baseSize
+            },
+
+            this.materials.darkConcrete,
+
+            {
+                floorIndex
+            }
+
+        );
+
+        // Verstärkung oben
+        this.createPart(
+
+            "Pfeiler_Kopf_" + floorIndex + "_" + index,
+
+            {
+                x,
+                y: floorY + height - 0.2,
+                z
+            },
+
+            {
+                x: baseSize,
+                y: 0.4,
+                z: baseSize
+            },
+
+            this.materials.reinforcement,
+
+            {
+                floorIndex
+            }
+
+        );
+
+    }
+
+    // ========================================================
+    // WANDVERSTÄRKUNGEN
+    // ========================================================
+
+    buildReinforcements(floorY, floorIndex) {
+
+        const half = this.options.width / 2;
+
+        const height = this.options.wallHeight;
+
+        const thickness = 0.3;
+
+        const positions = [-8, 0, 8];
+
+        for (let i = 0; i < positions.length; i++) {
+
+            const z = positions[i];
+
+            // Verstärkungsrippen an linker Wand
+            this.createPart(
+
+                "Wandverstaerkung_Links_" + floorIndex + "_" + i,
+
+                {
+                    x: -half + 0.65,
+                    y: floorY + height / 2,
+                    z
+                },
+
+                {
+                    x: thickness,
+                    y: height,
+                    z: 0.5
+                },
+
+                this.materials.darkConcrete,
+
+                {
+                    solid: true,
+                    floorIndex
+                }
+
+            );
+
+            // Verstärkungsrippen an rechter Wand
+            this.createPart(
+
+                "Wandverstaerkung_Rechts_" + floorIndex + "_" + i,
+
+                {
+                    x: half - 0.65,
+                    y: floorY + height / 2,
+                    z
+                },
+
+                {
+                    x: thickness,
+                    y: height,
+                    z: 0.5
+                },
+
+                this.materials.darkConcrete,
+
+                {
+                    solid: true,
+                    floorIndex
+                }
 
             );
 
@@ -493,27 +1239,102 @@ export class BunkerSystem {
 
     }
 
-    // =====================================================
+    // ========================================================
+    // DECKENBALKEN
+    // ========================================================
+
+    buildCeiling(floorY, floorIndex) {
+
+        const height = this.options.wallHeight;
+
+        const width = this.options.width;
+
+        const depth = this.options.depth;
+
+        const beamY =
+            floorY + height - 0.22;
+
+        const beamSize = 0.38;
+
+        // Querbalken
+        for (
+            let z = -8;
+            z <= 8;
+            z += 8
+        ) {
+
+            this.createPart(
+
+                "Deckenbalken_" + floorIndex + "_" + z,
+
+                {
+                    x: 0,
+                    y: beamY,
+                    z
+                },
+
+                {
+                    x: width - 0.5,
+                    y: beamSize,
+                    z: beamSize
+                },
+
+                this.materials.darkConcrete,
+
+                {
+                    solid: true,
+                    floorIndex
+                }
+
+            );
+
+        }
+
+        // Längsbalken
+        for (
+            let x = -8;
+            x <= 8;
+            x += 8
+        ) {
+
+            this.createPart(
+
+                "Deckenbalken_Laengs_" + floorIndex + "_" + x,
+
+                {
+                    x,
+                    y: beamY,
+                    z: 0
+                },
+
+                {
+                    x: beamSize,
+                    y: beamSize,
+                    z: depth - 0.5
+                },
+
+                this.materials.darkConcrete,
+
+                {
+                    solid: true,
+                    floorIndex
+                }
+
+            );
+
+        }
+
+    }
+
+    // ========================================================
     // ETAGE SICHTBAR SCHALTEN
-    // =====================================================
+    // ========================================================
 
     setFloorVisible(floorIndex, visible) {
 
-        const prefix = [
-            "Bunker_Boden_Etage_" + (floorIndex + 1),
-            "Bunker_Wand_",
-            "Bunker_Vorderwand_",
-            "Bunker_Tuersturz_",
-            "Bunker_Pfeiler_" + floorIndex + "_"
-        ];
-
         this.group.children.forEach(object => {
 
-            const matches = prefix.some(name =>
-                object.name.startsWith(name)
-            );
-
-            if (matches) {
+            if (object.userData.floorIndex === floorIndex) {
 
                 object.visible = visible;
 
@@ -523,9 +1344,9 @@ export class BunkerSystem {
 
     }
 
-    // =====================================================
-    // ALLES SICHTBAR SCHALTEN
-    // =====================================================
+    // ========================================================
+    // ALLE ETAGEN SICHTBAR SCHALTEN
+    // ========================================================
 
     setVisible(visible) {
 
@@ -533,11 +1354,62 @@ export class BunkerSystem {
 
     }
 
-    // =====================================================
+    // ========================================================
+    // PHYSIK-KOLLISIONEN ENTFERNEN
+    // ========================================================
+
+    removePhysicsBodies() {
+
+        if (!this.physics || !this.physics.world) {
+
+            this.physicsBodies = [];
+
+            return;
+
+        }
+
+        for (const entry of this.physicsBodies) {
+
+            const body =
+                entry?.body ??
+                entry?.rigidBody ??
+                entry;
+
+            if (!body) continue;
+
+            try {
+
+                if (
+                    typeof body.isValid !== "function" ||
+                    body.isValid()
+                ) {
+
+                    this.physics.world.removeRigidBody(body);
+
+                }
+
+            } catch (error) {
+
+                console.warn(
+                    "Bunker-Physikkörper konnte nicht entfernt werden:",
+                    error
+                );
+
+            }
+
+        }
+
+        this.physicsBodies = [];
+
+    }
+
+    // ========================================================
     // AUFRÄUMEN
-    // =====================================================
+    // ========================================================
 
     dispose() {
+
+        this.removePhysicsBodies();
 
         this.group.traverse(object => {
 
@@ -549,34 +1421,29 @@ export class BunkerSystem {
 
         });
 
+        const disposedTextures = new Set();
+
         Object.values(this.materials).forEach(material => {
+
+            if (material.map && !disposedTextures.has(material.map)) {
+
+                material.map.dispose();
+
+                disposedTextures.add(material.map);
+
+            }
+
+            if (material.bumpMap && !disposedTextures.has(material.bumpMap)) {
+
+                material.bumpMap.dispose();
+
+                disposedTextures.add(material.bumpMap);
+
+            }
 
             material.dispose();
 
         });
-
-        // Physik-Körper entfernen, sofern vorhanden
-        if (this.physics && this.physics.world) {
-
-            for (const entry of this.physicsBodies) {
-
-                const body = entry?.body ?? entry;
-
-                if (body && typeof body.isValid === "function") {
-
-                    if (body.isValid()) {
-
-                        this.physics.world.removeRigidBody(body);
-
-                    }
-
-                }
-
-            }
-
-        }
-
-        this.physicsBodies = [];
 
         this.scene.remove(this.group);
 
@@ -584,11 +1451,15 @@ export class BunkerSystem {
 
 }
 
-// =========================================================
+// ============================================================
 // ERSTELLFUNKTION
-// =========================================================
+// ============================================================
 
-export function createBunker(scene, physics = null, options = {}) {
+export function createBunker(
+    scene,
+    physics = null,
+    options = {}
+) {
 
     return new BunkerSystem(
         scene,

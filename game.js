@@ -2,7 +2,7 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
 
 import { PhysicsSystem } from "./physik.js";
-import { createCoin } from "./coin.js";
+import { CoinFactory } from "./coin.js";
 import { createStaircase } from "./treppe.js";
 import { createPickupSystem } from "./heben.js";
 import { createCoinCountingMachine } from "./maschine.js";
@@ -25,6 +25,7 @@ const CELL_SIZE = 0.4;
 
 const COIN_DIAMETER = 0.376;
 const COIN_THICKNESS = 0.1;
+const COIN_RADIUS = COIN_DIAMETER / 2;
 
 const LOWER_LAYERS = 80;
 const TOP_LAYERS = 4;
@@ -45,6 +46,8 @@ const TOTAL_COINS =
 const SLOT_COUNT = 15;
 const STACK_LIMIT = 9999;
 
+const MAX_INVENTORY = SLOT_COUNT * STACK_LIMIT;
+
 const STAIR_X = 8.5;
 const STAIR_START_Z = -7;
 const STAIR_LENGTH = 14;
@@ -53,7 +56,11 @@ const STAIR_STEPS = 32;
 const STAIR_RUN = STAIR_LENGTH / STAIR_STEPS;
 const STAIR_RISE = FLOOR_HEIGHT / STAIR_STEPS;
 
-const MAX_INVENTORY = SLOT_COUNT * STACK_LIMIT;
+const MACHINE_POSITION = {
+    x: -8,
+    y: 0.4,
+    z: -8
+};
 
 // ============================================================
 // SZENE
@@ -103,10 +110,26 @@ document.body.appendChild(renderer.domElement);
 
 const physics = new PhysicsSystem({
     maxBodies: 500,
-    gravity: -9.81
+    gravity: -9.81,
+    fixedTimeStep: 1 / 60,
+    maxSubSteps: 8
 });
 
 await physics.init();
+
+// ============================================================
+// MÜNZFABRIK
+// ============================================================
+
+// Wichtig:
+// Alle Münzen verwenden dasselbe detaillierte Design.
+// Die Abmessungen entsprechen den Münzstapeln.
+
+const coinFactory = new CoinFactory({
+    radius: COIN_RADIUS,
+    thickness: COIN_THICKNESS,
+    detailLevel: 64
+});
 
 // ============================================================
 // MATERIALIEN
@@ -133,82 +156,6 @@ const darkSteel = new THREE.MeshStandardMaterial({
     metalness: 0.7,
     roughness: 0.4
 });
-
-const goldSide = new THREE.MeshStandardMaterial({
-    color: 0xd99a19,
-    metalness: 0.9,
-    roughness: 0.22
-});
-
-// ============================================================
-// MÜNZTEXTUR FÜR DIE GROSSEN MÜNZSTAPEL
-// ============================================================
-
-function createCoinTexture() {
-
-    const canvas = document.createElement("canvas");
-
-    canvas.width = 128;
-    canvas.height = 128;
-
-    const ctx = canvas.getContext("2d");
-
-    ctx.fillStyle = "#e9b83c";
-    ctx.fillRect(0, 0, 128, 128);
-
-    ctx.strokeStyle = "#fff0a0";
-    ctx.lineWidth = 4;
-
-    ctx.beginPath();
-    ctx.arc(64, 64, 54, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = "#98620b";
-    ctx.lineWidth = 3;
-
-    ctx.beginPath();
-    ctx.arc(64, 64, 43, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = "#fff0a0";
-    ctx.lineWidth = 2;
-
-    ctx.beginPath();
-    ctx.arc(64, 64, 34, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = "#98620b";
-    ctx.font = "bold 38px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.fillText("1", 64, 66);
-
-    ctx.fillStyle = "#fff2b5";
-    ctx.font = "bold 12px Arial";
-
-    ctx.fillText("COIN", 64, 94);
-
-    const texture = new THREE.CanvasTexture(canvas);
-
-    texture.colorSpace = THREE.SRGBColorSpace;
-
-    return texture;
-}
-
-const coinFace = new THREE.MeshStandardMaterial({
-    map: createCoinTexture(),
-    color: 0xffffff,
-    metalness: 0.8,
-    roughness: 0.24
-});
-
-const coinGeometry = new THREE.CylinderGeometry(
-    COIN_DIAMETER / 2,
-    COIN_DIAMETER / 2,
-    COIN_THICKNESS,
-    16
-);
 
 // ============================================================
 // HILFSFUNKTIONEN
@@ -241,15 +188,11 @@ function createBox(
 }
 
 function clamp(value, min, max) {
-
     return Math.max(min, Math.min(max, value));
-
 }
 
 function random(min, max) {
-
     return min + Math.random() * (max - min);
-
 }
 
 // ============================================================
@@ -284,10 +227,6 @@ const bunkerLighting = createBunkerLighting(scene, {
     lampSpacing: 8
 });
 
-// Lichtmodul ist für Etagen in positiver Y-Richtung gebaut.
-// Unser Bunker geht nach unten. Deshalb werden die Lampen
-// auf die passenden Höhen gespiegelt.
-
 for (const light of bunkerLighting.lights) {
 
     if (light.isPointLight) {
@@ -297,9 +236,7 @@ for (const light of bunkerLighting.lights) {
 }
 
 for (const lamp of bunkerLighting.lampObjects) {
-
     lamp.position.y = 15.3 - lamp.position.y;
-
 }
 
 // ============================================================
@@ -356,7 +293,7 @@ function createWorldPhysics() {
         { x: 24, y: 65, z: 1 }
     );
 
-    // Etagenböden mit Öffnung für die Treppe
+    // Etagenböden mit Treppenöffnung
 
     for (let level = 0; level < FLOOR_COUNT; level++) {
 
@@ -374,7 +311,7 @@ function createWorldPhysics() {
 
     }
 
-    // Einzelne Stufenkollisionen
+    // Treppenstufen
 
     for (let level = 0; level < FLOOR_COUNT - 1; level++) {
 
@@ -502,9 +439,6 @@ const staircase = createStaircase(scene, {
     createPhysics: false
 });
 
-// Das Treppenmodul baut nach oben.
-// Der Bunker geht nach unten.
-
 staircase.group.scale.y = -1;
 
 // ============================================================
@@ -513,15 +447,21 @@ staircase.group.scale.y = -1;
 
 const dummy = new THREE.Object3D();
 
+const faceUpQuaternion = new THREE.Quaternion()
+    .setFromAxisAngle(
+        new THREE.Vector3(1, 0, 0),
+        -Math.PI / 2
+    );
+
+const spinQuaternion = new THREE.Quaternion();
+
 const cellCounts = [];
 const cellStarts = [];
 const cellChunkIds = [];
 const coinChunks = [];
 
 function cellIndex(x, z) {
-
     return z * GRID_SIZE + x;
-
 }
 
 function getCellWorld(ix, iz) {
@@ -532,6 +472,10 @@ function getCellWorld(ix, iz) {
     };
 
 }
+
+// ============================================================
+// CHUNK-DATEN ERSTELLEN
+// ============================================================
 
 for (let level = 0; level < FLOOR_COUNT; level++) {
 
@@ -691,19 +635,19 @@ function ensureChunkLoaded(chunk) {
     const capacity =
         CHUNK_SIZE * CHUNK_SIZE * layers;
 
-    const mesh = new THREE.InstancedMesh(
-        coinGeometry,
-        [goldSide, coinFace],
-        capacity
-    );
+    // WICHTIG:
+    // Die InstancedMesh verwendet die vollständige
+    // detaillierte CoinFactory-Geometrie.
 
-    mesh.instanceMatrix.setUsage(
-        THREE.DynamicDrawUsage
+    const mesh = coinFactory.createInstancedMesh(
+        capacity,
+        {
+            name: `CoinChunk_${level}_${chunk.chunkIndex}`
+        }
     );
 
     mesh.castShadow = false;
     mesh.receiveShadow = false;
-    mesh.frustumCulled = true;
 
     let localId = 0;
 
@@ -741,11 +685,17 @@ function ensureChunkLoaded(chunk) {
                     pos.z
                 );
 
-                dummy.rotation.set(
-                    0,
-                    random(0, Math.PI * 2),
-                    0
+                // Münzfläche nach oben drehen.
+                // Anschließend zufällige Drehung um die Münzfläche.
+
+                spinQuaternion.setFromAxisAngle(
+                    new THREE.Vector3(0, 0, 1),
+                    random(0, Math.PI * 2)
                 );
+
+                dummy.quaternion
+                    .copy(faceUpQuaternion)
+                    .multiply(spinQuaternion);
 
                 dummy.scale.set(1, 1, 1);
 
@@ -970,9 +920,7 @@ const pickup = createPickupSystem(
 // ============================================================
 
 function getHeldCoins() {
-
     return pickup.getInventoryCount();
-
 }
 
 function renderInventory() {
@@ -1086,9 +1034,13 @@ const horizontalPlane = new THREE.Plane(
 
 const hitPoint = new THREE.Vector3();
 
+const cameraForward = new THREE.Vector3();
+
 function findPileCoin() {
 
     raycaster.setFromCamera(mouse, camera);
+
+    camera.getWorldDirection(cameraForward);
 
     let best = null;
 
@@ -1164,16 +1116,24 @@ function findPileCoin() {
                 continue;
             }
 
+            const center = getCellWorld(
+                cell.ix,
+                cell.iz
+            );
+
+            const targetPosition = new THREE.Vector3(
+                center.x,
+                planeY,
+                center.z
+            );
+
             const distance =
-                camera.position.distanceTo(hitPoint);
+                camera.position.distanceTo(targetPosition);
 
             const direction = new THREE.Vector3()
-                .subVectors(hitPoint, camera.position);
+                .subVectors(targetPosition, camera.position);
 
-            if (direction.dot(
-                new THREE.Vector3(0, 0, -1)
-                    .applyQuaternion(camera.quaternion)
-            ) <= 0) {
+            if (direction.dot(cameraForward) <= 0) {
                 continue;
             }
 
@@ -1189,7 +1149,7 @@ function findPileCoin() {
             best = {
                 level,
                 cell,
-                point: hitPoint.clone(),
+                point: targetPosition.clone(),
                 layer
             };
 
@@ -1214,8 +1174,8 @@ function createInventoryCoin(position) {
             z: position.z
         },
         {
-            radius: 0.18,
-            thickness: 0.035,
+            radius: COIN_RADIUS,
+            thickness: COIN_THICKNESS,
             density: 2.5,
             friction: 0.85,
             restitution: 0.18
@@ -1230,11 +1190,19 @@ function createInventoryCoin(position) {
 
     }
 
-    const mesh = createCoin({
-        x: position.x,
-        y: position.y,
-        z: position.z
-    });
+    // Auch die Inventarmünze verwendet die detaillierte Fabrik.
+
+    const mesh = coinFactory.create(
+        {
+            x: position.x,
+            y: position.y,
+            z: position.z
+        },
+        {
+            id: physicsCoin.id,
+            value: 1
+        }
+    );
 
     scene.add(mesh);
 
@@ -1243,8 +1211,6 @@ function createInventoryCoin(position) {
         physicsCoin,
         1
     );
-
-    // Münze liegt jetzt im Inventar und wird nicht simuliert.
 
     physics.freezeCoin(physicsCoin);
 
@@ -1384,12 +1350,29 @@ function collectPileCoin() {
         cellStarts[level][cell.index] +
         count - 1;
 
-    // Münze aus dem sichtbaren Stapel entfernen.
+    const coinPosition = {
+        x: point.x,
+        y: point.y - COIN_THICKNESS / 2,
+        z: point.z
+    };
+
+    // Zuerst echte Münze erstellen.
+    // So geht keine Münze verloren, falls das Physiklimit erreicht ist.
+
+    const success = createInventoryCoin(
+        coinPosition
+    );
+
+    if (!success) {
+        return false;
+    }
+
+    // Erst danach die Münze aus dem sichtbaren Stapel entfernen.
 
     cellCounts[level][cell.index]--;
 
     dummy.position.set(0, -1000, 0);
-
+    dummy.quaternion.identity();
     dummy.scale.set(0, 0, 0);
 
     dummy.updateMatrix();
@@ -1402,29 +1385,6 @@ function collectPileCoin() {
     chunk.mesh.instanceMatrix.needsUpdate = true;
 
     chunk.remaining--;
-
-    // Eine echte Münze für das Inventar erzeugen.
-
-    const coinPosition = {
-        x: point.x,
-        y: point.y - COIN_THICKNESS / 2,
-        z: point.z
-    };
-
-    const success = createInventoryCoin(
-        coinPosition
-    );
-
-    if (!success) {
-
-        // Falls keine Physikmünze erzeugt werden konnte,
-        // wird der Stapel wiederhergestellt.
-
-        cellCounts[level][cell.index]++;
-
-        return false;
-
-    }
 
     createPickupEffect(
         point.x,
@@ -1439,7 +1399,7 @@ function collectPileCoin() {
 }
 
 // ============================================================
-// DROPPEN MIT ECHTER RAPIER-PHYSIK
+// DROPPEN MIT HEBEN.JS
 // ============================================================
 
 function dropInventoryCoin() {
@@ -1452,120 +1412,38 @@ function dropInventoryCoin() {
 
     }
 
-    const coin = pickup.inventory[0];
+    // heben.js übernimmt:
+    // - Inventarentfernung
+    // - Physik reaktivieren
+    // - Münze in die Welt setzen
+    // - Bewegung beim Fallenlassen
 
-    if (!coin) return false;
-
-    // heben.js übernimmt das visuelle Droppen.
     const success = pickup.dropCoin();
 
-    if (!success) return false;
-
-    const physicsCoin = coin.physicsCoin;
-
-    if (!physicsCoin) {
-
-        showMessage("Diese Münze hat keinen Physikkörper!");
-
+    if (!success) {
+        showMessage("Münze konnte nicht fallen gelassen werden!");
         return false;
-
     }
-
-    // heben.js friert die Münze beim Aufheben ein.
-    // Wir setzen deshalb den gespeicherten Zustand neu,
-    // bevor wir den Physikkörper wieder aktivieren.
-
-    const mesh = coin.mesh;
-
-    const position = mesh.position;
-
-    const visualRotation =
-        mesh.quaternion.clone();
-
-    // Die Münzfläche in coin.js liegt auf lokaler Z-Achse.
-    // Rapier-Zylinder verwenden die Y-Achse.
-
-    const correction =
-        new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(1, 0, 0),
-            Math.PI / 2
-        );
-
-    const physicsRotation =
-        visualRotation.clone().multiply(correction);
-
-    const direction = new THREE.Vector3();
-
-    camera.getWorldDirection(direction);
-
-    const velocity = {
-        x: direction.x * 2,
-        y: -0.8,
-        z: direction.z * 2
-    };
-
-    const angularVelocity = {
-        x: random(-3.5, 3.5),
-        y: random(-3.5, 3.5),
-        z: random(-3.5, 3.5)
-    };
-
-    physicsCoin.savedState = {
-
-        position: {
-            x: position.x,
-            y: position.y,
-            z: position.z
-        },
-
-        rotation: {
-            x: physicsRotation.x,
-            y: physicsRotation.y,
-            z: physicsRotation.z,
-            w: physicsRotation.w
-        },
-
-        velocity,
-
-        angularVelocity
-
-    };
-
-    const resumed = physics.resumeCoin(
-        physicsCoin
-    );
-
-    if (!resumed) {
-
-        showMessage(
-            "Zu viele aktive Physikmünzen!"
-        );
-
-        return false;
-
-    }
-
-    physicsCoin.body.setLinvel(
-        velocity,
-        true
-    );
-
-    physicsCoin.body.setAngvel(
-        angularVelocity,
-        true
-    );
-
-    physicsCoin.body.wakeUp();
 
     showMessage("Münze fallengelassen!");
+
+    updateHUD();
 
     return true;
 
 }
 
 // ============================================================
-// FALLEN GELASSENE MÜNZEN MIT PHYSIK SYNCHRONISIEREN
+// FALLEN GELASSENE MÜNZEN SYNCHRONISIEREN
 // ============================================================
+
+const physicsQuaternion = new THREE.Quaternion();
+
+const visualCorrection = new THREE.Quaternion()
+    .setFromAxisAngle(
+        new THREE.Vector3(1, 0, 0),
+        -Math.PI / 2
+    );
 
 function updateDroppedCoinVisuals() {
 
@@ -1574,6 +1452,8 @@ function updateDroppedCoinVisuals() {
         if (!coin.available) continue;
 
         if (!coin.physicsCoin?.active) continue;
+
+        if (!coin.mesh) continue;
 
         const transform = physics.getTransform(
             coin.physicsCoin
@@ -1590,23 +1470,16 @@ function updateDroppedCoinVisuals() {
             p.z
         );
 
-        const rapierQuaternion =
-            new THREE.Quaternion(
-                r.x,
-                r.y,
-                r.z,
-                r.w
-            );
-
-        const correction =
-            new THREE.Quaternion().setFromAxisAngle(
-                new THREE.Vector3(1, 0, 0),
-                -Math.PI / 2
-            );
+        physicsQuaternion.set(
+            r.x,
+            r.y,
+            r.z,
+            r.w
+        );
 
         coin.mesh.quaternion.copy(
-            rapierQuaternion.multiply(correction)
-        );
+            physicsQuaternion
+        ).multiply(visualCorrection);
 
         // Sehr tief gefallene Münzen entfernen.
 
@@ -1616,7 +1489,7 @@ function updateDroppedCoinVisuals() {
 
             physics.removeCoin(coin.physicsCoin);
 
-            pickup.unregisterCoin(coin.mesh);
+            coin.available = false;
 
         }
 
@@ -1625,24 +1498,16 @@ function updateDroppedCoinVisuals() {
 }
 
 // ============================================================
-// MÜNZZÄHLMASCHINE – MASCHINE.JS
+// MÜNZZÄHLMASCHINE
 // ============================================================
 
 const machine = createCoinCountingMachine(
     scene,
     physics,
     {
-        position: {
-            x: -8,
-            y: 0.4,
-            z: -8
-        },
-
+        position: MACHINE_POSITION,
         scale: 1,
-
         spawnInterval: 0.13,
-
-        // Genug Platz für das gesamte Inventar.
         maxQueuedCoins: MAX_INVENTORY
     }
 );
@@ -1658,15 +1523,12 @@ function showMessage(text) {
     if (!el) return;
 
     el.textContent = text;
-
     el.style.opacity = "1";
 
     clearTimeout(window.messageTimeout);
 
     window.messageTimeout = setTimeout(() => {
-
         el.style.opacity = "0";
-
     }, 1500);
 
 }
@@ -1678,10 +1540,10 @@ function showMessage(text) {
 function isNearMachine() {
 
     const dx =
-        player.position.x - machine.position.x;
+        player.position.x - MACHINE_POSITION.x;
 
     const dz =
-        player.position.z - machine.position.z;
+        player.position.z - MACHINE_POSITION.z;
 
     return Math.sqrt(dx * dx + dz * dz) < 3.5;
 
@@ -1700,10 +1562,6 @@ function depositCoins() {
         return false;
 
     }
-
-    // Münzen werden aus dem Inventar übernommen.
-    // Die Maschine erzeugt anschließend ihre eigenen
-    // physischen Münzen im Einfülltrichter.
 
     const accepted = machine.insertCoins(
         amount,
@@ -1727,6 +1585,8 @@ function depositCoins() {
         " Münzen werden eingeworfen!"
     );
 
+    updateHUD();
+
     return true;
 
 }
@@ -1741,7 +1601,7 @@ function getGroundHeight(x, z, level) {
 
     const cell = worldToCell(x, z);
 
-    // Auf der obersten Etage auf dem Münzteppich stehen.
+    // Münzteppich auf der obersten Etage.
 
     if (level === 0 && cell) {
 
@@ -1839,10 +1699,13 @@ function updatePlayer(dt) {
 
     let blocked = false;
 
-    if (cell && !isInRampArea(
-        player.position.x,
-        player.position.z
-    )) {
+    if (
+        cell &&
+        !isInRampArea(
+            player.position.x,
+            player.position.z
+        )
+    ) {
 
         for (
             let floor = 1;
@@ -1940,18 +1803,13 @@ function updatePlayer(dt) {
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
 
-    // Münzen in Spielnähe anschubsen
-
-    const movementVelocity = {
-        x: (player.position.x - oldPosition.x) / Math.max(dt, 0.001),
-        y: 0,
-        z: (player.position.z - oldPosition.z) / Math.max(dt, 0.001)
-    };
+    // Münzen in Spielnähe anschubsen.
+    // Korrekte Parameter: Position, Radius, Stärke.
 
     physics.pushCoinsNearPlayer(
         player.position,
-        movementVelocity,
-        1.25
+        1.25,
+        0.8
     );
 
     updateCoinVisibility();
@@ -2019,8 +1877,7 @@ document.addEventListener("mousedown", event => {
 
     if (event.button !== 0) return;
 
-    // Zuerst versuchen, eine fallengelassene Münze
-    // aus der Welt aufzuheben.
+    // Zuerst fallengelassene Münzen aufheben.
 
     const droppedCoin = pickup.pickupCoin();
 
@@ -2034,7 +1891,7 @@ document.addEventListener("mousedown", event => {
 
     }
 
-    // Danach normale Münzen aus dem großen Stapel.
+    // Danach Münzen aus dem großen Stapel.
 
     collectPileCoin();
 
@@ -2053,17 +1910,13 @@ document.addEventListener("keydown", event => {
     // E: Einzahlen
 
     if (event.code === "KeyE" && locked) {
-
         depositCoins();
-
     }
 
     // Q: Münze droppen
 
     if (event.code === "KeyQ" && locked) {
-
         dropInventoryCoin();
-
     }
 
     // Springen
@@ -2101,9 +1954,7 @@ document.addEventListener("keydown", event => {
 });
 
 document.addEventListener("keyup", event => {
-
     keys[event.code] = false;
-
 });
 
 // ============================================================
@@ -2133,9 +1984,7 @@ document.addEventListener("mousemove", event => {
 document.getElementById("startButton")?.addEventListener(
     "click",
     () => {
-
         renderer.domElement.requestPointerLock();
-
     }
 );
 
@@ -2161,17 +2010,22 @@ document.addEventListener("pointerlockchange", () => {
 // ============================================================
 
 document.addEventListener("contextmenu", event => {
-
     event.preventDefault();
-
 });
+
+// ============================================================
+// HUD-UPDATE-TAKT
+// ============================================================
+
+let hudTimer = 0;
+
+const HUD_INTERVAL = 0.15;
 
 // ============================================================
 // ANIMATION
 // ============================================================
 
 let lastTime = 0;
-
 let animationTime = 0;
 
 function animate(time) {
@@ -2205,21 +2059,29 @@ function animate(time) {
 
     machine.update(dt);
 
-    // Münzen aus der Physik in die Darstellung übertragen
-
-    updateDroppedCoinVisuals();
-
-    // Münzzählerstand übernehmen
-
-    money = machine.totalValue;
-
-    // Inventar und Geldanzeige
-
-    updateHUD();
-
     // Aufhebesystem
 
     pickup.update(dt);
+
+    // Physikpositionen in sichtbare Münzen übertragen
+
+    updateDroppedCoinVisuals();
+
+    // Geldstand
+
+    money = machine.totalValue;
+
+    // HUD nicht unnötig in jedem Frame neu aufbauen
+
+    hudTimer += dt;
+
+    if (hudTimer >= HUD_INTERVAL) {
+
+        hudTimer = 0;
+
+        updateHUD();
+
+    }
 
     // Partikel
 
@@ -2276,6 +2138,7 @@ window.oneMillionCoins = {
     machine,
     staircase,
     bunkerLighting,
+    coinFactory,
 
     getMoney() {
         return machine.totalValue;
@@ -2291,6 +2154,24 @@ window.oneMillionCoins = {
 
     getTotalPhysicsCoins() {
         return physics.getCoinCount();
+    },
+
+    getTotalCoins() {
+        return TOTAL_COINS;
+    },
+
+    getLoadedChunks() {
+
+        let count = 0;
+
+        for (const floor of coinChunks) {
+            for (const chunk of floor) {
+                if (chunk.mesh) count++;
+            }
+        }
+
+        return count;
+
     }
 
 };

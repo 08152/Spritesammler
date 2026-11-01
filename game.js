@@ -1,10 +1,6 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
 import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.17.3/rapier.es.js";
 
-// =====================================================
-// RAPier INITIALISIEREN
-// =====================================================
-
 await RAPIER.init();
 
 // =====================================================
@@ -27,10 +23,10 @@ const COIN_RADIUS = 0.188;
 const COIN_THICKNESS = 0.1;
 
 const MAX_LOADED_CHUNKS = 24;
-const MAX_ACTIVE_BODIES = 1200;
+const MAX_ACTIVE_BODIES = 180;
 
-const PHYSICS_RADIUS = 7;
-const MAX_CHUNK_LOADS = 2;
+const PHYSICS_RADIUS = 6;
+const MAX_CHUNK_LOADS = 3;
 
 const TOTAL_COINS =
     6 * GRID_SIZE * GRID_SIZE * LOWER_LAYERS +
@@ -42,8 +38,8 @@ const TOTAL_COINS =
 
 const scene = new THREE.Scene();
 
-scene.background = new THREE.Color(0x171918);
-scene.fog = new THREE.FogExp2(0x171918, 0.006);
+scene.background = new THREE.Color(0x111619);
+scene.fog = new THREE.FogExp2(0x111619, 0.0045);
 
 const camera = new THREE.PerspectiveCamera(
     75,
@@ -53,24 +49,174 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 const renderer = new THREE.WebGLRenderer({
-    antialias: false,
+    antialias: true,
     powerPreference: "high-performance"
 });
 
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = false;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 
 document.body.appendChild(renderer.domElement);
 
 // =====================================================
-// RAPier PHYSIK
+// DESIGN / HUD
 // =====================================================
 
-const gravity = { x: 0, y: -9.81, z: 0 };
+const style = document.createElement("style");
 
-const world = new RAPIER.World(gravity);
+style.textContent = `
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #101518;
+        font-family: Arial, sans-serif;
+    }
+
+    canvas {
+        display: block;
+    }
+
+    #inventory {
+        display: flex;
+        justify-content: center;
+        gap: 7px;
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+    }
+
+    .slot {
+        width: 55px;
+        height: 55px;
+        border: 1px solid rgba(255,255,255,.17);
+        background: rgba(12,20,24,.88);
+        border-radius: 10px;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        font-size: 19px;
+        position: relative;
+        box-shadow: 0 5px 20px #0008;
+        transition: .15s;
+    }
+
+    .slot.active {
+        border: 2px solid #f4c45d;
+        background: rgba(80,59,24,.8);
+        transform: translateY(-7px);
+        box-shadow: 0 0 18px #f4c45d55;
+    }
+
+    .slot span {
+        position: absolute;
+        top: 4px;
+        left: 6px;
+        font-size: 10px;
+        color: #aeb8bc;
+    }
+
+    .slot small {
+        font-size: 10px;
+        color: #f4d17e;
+    }
+
+    #message {
+        position: fixed;
+        top: 18%;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #ffe2a0;
+        background: rgba(12,18,21,.9);
+        border: 1px solid #b98a38;
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-size: 15px;
+        letter-spacing: 1px;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 30;
+        transition: opacity .2s;
+        box-shadow: 0 5px 25px #0009;
+    }
+
+    #interaction {
+        color: #f5d58a;
+        text-shadow: 0 2px 5px black;
+    }
+
+    #progressFill {
+        transition: width .3s;
+    }
+
+    #startScreen {
+        backdrop-filter: blur(12px);
+        background: rgba(5,10,13,.88);
+    }
+
+    #startButton {
+        cursor: pointer;
+        transition: .2s;
+    }
+
+    #startButton:hover {
+        transform: scale(1.05);
+        filter: brightness(1.2);
+    }
+
+    #gameCrosshair {
+        position: fixed;
+        width: 8px;
+        height: 8px;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%,-50%);
+        border: 1px solid rgba(255,226,160,.9);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 20;
+        box-shadow: 0 0 8px #ffcf70;
+    }
+
+    #gameVignette {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 5;
+        background: radial-gradient(
+            ellipse at center,
+            transparent 50%,
+            rgba(0,0,0,.35) 100%
+        );
+    }
+`;
+
+document.head.appendChild(style);
+
+const crosshair = document.createElement("div");
+crosshair.id = "gameCrosshair";
+document.body.appendChild(crosshair);
+
+const vignette = document.createElement("div");
+vignette.id = "gameVignette";
+document.body.appendChild(vignette);
+
+// =====================================================
+// PHYSIK
+// =====================================================
+
+const world = new RAPIER.World({
+    x: 0,
+    y: -9.81,
+    z: 0
+});
 
 world.timestep = 1 / 60;
 
@@ -81,62 +227,87 @@ const eventQueue = new RAPIER.EventQueue(true);
 // =====================================================
 
 const concrete = new THREE.MeshStandardMaterial({
-    color: 0x555751,
-    roughness: 0.9
+    color: 0x3b4548,
+    roughness: 0.85,
+    metalness: 0.15
 });
 
 const floorMaterial = new THREE.MeshStandardMaterial({
-    color: 0x30332f,
-    roughness: 0.95
+    color: 0x252e32,
+    roughness: 0.82,
+    metalness: 0.3
 });
 
 const steel = new THREE.MeshStandardMaterial({
-    color: 0x596164,
-    metalness: 0.75,
-    roughness: 0.4
+    color: 0x65757a,
+    metalness: 0.85,
+    roughness: 0.3
+});
+
+const darkSteel = new THREE.MeshStandardMaterial({
+    color: 0x20292d,
+    metalness: 0.8,
+    roughness: 0.35
 });
 
 const goldSide = new THREE.MeshStandardMaterial({
     color: 0xd99a19,
-    metalness: 0.9,
-    roughness: 0.22
+    metalness: 0.95,
+    roughness: 0.2
 });
 
+// Münztextur
+
 const coinCanvas = document.createElement("canvas");
-coinCanvas.width = 128;
-coinCanvas.height = 128;
+coinCanvas.width = 256;
+coinCanvas.height = 256;
 
 const coinCtx = coinCanvas.getContext("2d");
 
-coinCtx.fillStyle = "#e9b83c";
-coinCtx.fillRect(0, 0, 128, 128);
+const gradient = coinCtx.createRadialGradient(
+    128, 128, 10,
+    128, 128, 130
+);
 
-coinCtx.strokeStyle = "#fff0a0";
-coinCtx.lineWidth = 4;
+gradient.addColorStop(0, "#ffe9a0");
+gradient.addColorStop(0.55, "#e9b83c");
+gradient.addColorStop(1, "#a66b12");
+
+coinCtx.fillStyle = gradient;
+coinCtx.fillRect(0, 0, 256, 256);
+
+coinCtx.strokeStyle = "#fff0ad";
+coinCtx.lineWidth = 8;
 coinCtx.beginPath();
-coinCtx.arc(64, 64, 54, 0, Math.PI * 2);
+coinCtx.arc(128, 128, 110, 0, Math.PI * 2);
 coinCtx.stroke();
 
-coinCtx.fillStyle = "#98620b";
-coinCtx.font = "bold 46px Arial";
+coinCtx.strokeStyle = "#9a6510";
+coinCtx.lineWidth = 5;
+coinCtx.beginPath();
+coinCtx.arc(128, 128, 92, 0, Math.PI * 2);
+coinCtx.stroke();
+
+coinCtx.fillStyle = "#86550d";
+coinCtx.font = "bold 110px Arial";
 coinCtx.textAlign = "center";
 coinCtx.textBaseline = "middle";
-coinCtx.fillText("1", 64, 64);
+coinCtx.fillText("1", 128, 128);
 
 const coinTexture = new THREE.CanvasTexture(coinCanvas);
 coinTexture.colorSpace = THREE.SRGBColorSpace;
 
 const coinFace = new THREE.MeshStandardMaterial({
     map: coinTexture,
-    metalness: 0.8,
-    roughness: 0.24
+    metalness: 0.85,
+    roughness: 0.2
 });
 
 const coinGeometry = new THREE.CylinderGeometry(
     COIN_RADIUS,
     COIN_RADIUS,
     COIN_THICKNESS,
-    12
+    20
 );
 
 // =====================================================
@@ -144,19 +315,17 @@ const coinGeometry = new THREE.CylinderGeometry(
 // =====================================================
 
 scene.add(new THREE.HemisphereLight(
-    0xc6d2dc,
-    0x29231b,
-    0.75
+    0xb9d4e0,
+    0x20190f,
+    1.0
 ));
 
 const mainLight = new THREE.DirectionalLight(
     0xffe4b7,
-    1.2
+    1.5
 );
 
-mainLight.position.set(-8, 20, 5);
-mainLight.castShadow = false;
-
+mainLight.position.set(-8, 25, 8);
 scene.add(mainLight);
 
 // =====================================================
@@ -174,7 +343,6 @@ function box(w, h, d, material, x, y, z) {
     mesh.receiveShadow = false;
 
     scene.add(mesh);
-
     return mesh;
 }
 
@@ -187,6 +355,45 @@ function rand(min, max) {
 }
 
 // =====================================================
+// BUNKER-DEKORATION
+// =====================================================
+
+function createLightStrip(x, y, z, length, horizontal = true) {
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(
+            horizontal ? length : 0.08,
+            0.07,
+            horizontal ? 0.08 : length
+        ),
+        new THREE.MeshBasicMaterial({
+            color: 0xffbd55
+        })
+    );
+
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+}
+
+for (let level = 0; level < FLOOR_COUNT; level++) {
+    const y = -level * FLOOR_HEIGHT;
+
+    createLightStrip(-11.3, y + 5.5, -11.3, 20);
+    createLightStrip(11.3, y + 5.5, -11.3, 20);
+    createLightStrip(-11.3, y + 5.5, 11.3, 20);
+
+    for (const side of [-1, 1]) {
+        const lamp = new THREE.PointLight(
+            0xffc978,
+            28,
+            15
+        );
+
+        lamp.position.set(side * 9.8, y + 4.5, 0);
+        scene.add(lamp);
+    }
+}
+
+// =====================================================
 // FESTE PHYSIKBÖDEN
 // =====================================================
 
@@ -196,13 +403,14 @@ function createPhysicsFloor(x, y, z, w, h, d) {
             .setTranslation(x, y, z)
     );
 
-    const collider = RAPIER.ColliderDesc.cuboid(
-        w / 2,
-        h / 2,
-        d / 2
+    world.createCollider(
+        RAPIER.ColliderDesc.cuboid(
+            w / 2,
+            h / 2,
+            d / 2
+        ),
+        body
     );
-
-    world.createCollider(collider, body);
 
     box(w, h, d, floorMaterial, x, y, z);
 }
@@ -218,8 +426,6 @@ box(24, 65, 1, concrete, 0, -24, 12);
 
 for (let level = 0; level < FLOOR_COUNT; level++) {
     const y = -level * FLOOR_HEIGHT;
-
-    // Ein durchgehender Boden mit seitlicher Treppenöffnung.
 
     createPhysicsFloor(
         -2.5,
@@ -238,30 +444,10 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
         0.7,
         24
     );
-
-    // Beleuchtung
-
-    for (const side of [-1, 1]) {
-        for (const z of [-8, 0, 8]) {
-            const light = new THREE.PointLight(
-                0xffc978,
-                35,
-                12
-            );
-
-            light.position.set(
-                side * 10.8,
-                y + 3.5,
-                z
-            );
-
-            scene.add(light);
-        }
-    }
 }
 
 // =====================================================
-// TREPPE - 32 EINZELNE STUFEN
+// TREPPE
 // =====================================================
 
 const STAIR_X = 8.5;
@@ -279,7 +465,7 @@ for (let level = 0; level < FLOOR_COUNT - 1; level++) {
         const z = STAIR_START_Z + i * stairRun;
         const y = topY - i * stairRise;
 
-        const step = box(
+        box(
             3.5,
             0.22,
             stairRun,
@@ -314,14 +500,18 @@ for (let level = 0; level < FLOOR_COUNT - 1; level++) {
 // =====================================================
 
 const chunks = [];
-
 const cellCounts = [];
 const cellChunkIds = [];
 
-const chunkLookup = [];
-
 function cellIndex(x, z) {
     return z * GRID_SIZE + x;
+}
+
+function getCellPosition(ix, iz) {
+    return {
+        x: -11 + (ix + 0.5) * CELL_SIZE,
+        z: -11 + (iz + 0.5) * CELL_SIZE
+    };
 }
 
 function getCell(x, z) {
@@ -340,28 +530,15 @@ function getCell(x, z) {
     };
 }
 
-function getCellPosition(ix, iz) {
-    return {
-        x: -11 + (ix + 0.5) * CELL_SIZE,
-        z: -11 + (iz + 0.5) * CELL_SIZE
-    };
-}
-
 for (let level = 0; level < FLOOR_COUNT; level++) {
     const layers = level === 0
         ? TOP_LAYERS
         : LOWER_LAYERS;
 
-    const counts = new Uint8Array(
-        GRID_SIZE * GRID_SIZE
-    );
-
+    const counts = new Uint8Array(GRID_SIZE * GRID_SIZE);
     counts.fill(layers);
 
-    const ids = new Uint16Array(
-        GRID_SIZE * GRID_SIZE
-    );
-
+    const ids = new Uint16Array(GRID_SIZE * GRID_SIZE);
     const floorChunks = [];
 
     for (let cz = 0; cz < CHUNKS_PER_SIDE; cz++) {
@@ -387,7 +564,7 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
                 cx,
                 cz,
                 mesh: null,
-                coins: [],
+                coins: null,
                 lastSeen: 0
             });
         }
@@ -445,7 +622,6 @@ function addCoins(amount) {
 
     for (let i = 0; i < inventory.length; i++) {
         const free = STACK_LIMIT - inventory[i];
-
         const add = Math.min(free, remaining);
 
         inventory[i] += add;
@@ -455,7 +631,6 @@ function addCoins(amount) {
     }
 
     updateHUD();
-
     return amount - remaining;
 }
 
@@ -466,22 +641,17 @@ function updateHUD() {
     const heldUI = document.getElementById("held");
 
     if (moneyUI) {
-        moneyUI.textContent =
-            money.toLocaleString("de-DE");
+        moneyUI.textContent = money.toLocaleString("de-DE");
     }
 
     if (heldUI) {
-        heldUI.textContent =
-            held.toLocaleString("de-DE");
+        heldUI.textContent = held.toLocaleString("de-DE");
     }
 
     const progress = money + held;
 
-    const progressText =
-        document.getElementById("progressText");
-
-    const progressFill =
-        document.getElementById("progressFill");
+    const progressText = document.getElementById("progressText");
+    const progressFill = document.getElementById("progressFill");
 
     if (progressText) {
         progressText.textContent =
@@ -509,7 +679,7 @@ function updateHUD() {
 
             slot.innerHTML = `
                 <span>${i + 1}</span>
-                ${amount > 0 ? "🪙" : ""}
+                ${amount > 0 ? "●" : ""}
                 <small>${amount || ""}</small>
             `;
 
@@ -522,81 +692,115 @@ function updateHUD() {
 // PHYSIK-MÜNZEN
 // =====================================================
 
-// Jede aktive Münze besitzt einen eigenen Rapier-Körper
-// und eine eigene Kollisionsform.
-
-const activeCoins = new Map();
-
-let nextCoinId = 1;
-
+const activeCoins = new Set();
 const tempObject = new THREE.Object3D();
 
-function createPhysicsCoin(x, y, z, chunk, localId) {
+function createPhysicsCoin(coin) {
     if (activeCoins.size >= MAX_ACTIVE_BODIES) {
-        return null;
+        return false;
     }
+
+    if (coin.body || coin.collected) return false;
 
     const body = world.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(x, y, z)
-            .setLinearDamping(0.35)
-            .setAngularDamping(0.55)
+            .setTranslation(coin.x, coin.y, coin.z)
+            .setLinearDamping(0.25)
+            .setAngularDamping(0.35)
             .setCanSleep(true)
     );
 
-    const collider = RAPIER.ColliderDesc.cylinder(
-        COIN_THICKNESS / 2,
-        COIN_RADIUS
-    )
-        .setDensity(7)
-        .setFriction(0.8)
-        .setRestitution(0.08);
+    world.createCollider(
+        RAPIER.ColliderDesc.cylinder(
+            COIN_THICKNESS / 2,
+            COIN_RADIUS
+        )
+            .setDensity(7)
+            .setFriction(0.9)
+            .setRestitution(0.12),
+        body
+    );
 
-    world.createCollider(collider, body);
+    if (coin.rotation) {
+        body.setRotation(coin.rotation, true);
+    }
 
-    const id = nextCoinId++;
+    if (coin.velocity) {
+        body.setLinvel(coin.velocity, true);
+    }
 
-    const coin = {
-        id,
-        body,
-        chunk,
-        localId,
-        frozen: false
+    if (coin.angularVelocity) {
+        body.setAngvel(coin.angularVelocity, true);
+    }
+
+    coin.body = body;
+    activeCoins.add(coin);
+
+    return true;
+}
+
+function saveCoinPhysics(coin) {
+    if (!coin.body) return;
+
+    const body = coin.body;
+
+    const p = body.translation();
+    const r = body.rotation();
+    const v = body.linvel();
+    const a = body.angvel();
+
+    coin.x = p.x;
+    coin.y = p.y;
+    coin.z = p.z;
+
+    coin.rotation = {
+        x: r.x,
+        y: r.y,
+        z: r.z,
+        w: r.w
     };
 
-    activeCoins.set(id, coin);
+    coin.velocity = {
+        x: v.x,
+        y: v.y,
+        z: v.z
+    };
 
-    return coin;
+    coin.angularVelocity = {
+        x: a.x,
+        y: a.y,
+        z: a.z
+    };
+
+    world.removeRigidBody(body);
+
+    activeCoins.delete(coin);
+    coin.body = null;
+}
+
+function freezeChunk(chunk) {
+    if (!chunk.coins) return;
+
+    for (const coin of chunk.coins) {
+        if (coin.body) {
+            saveCoinPhysics(coin);
+        }
+    }
 }
 
 // =====================================================
-// MÜNZEN-CHUNK ERSTELLEN
+// CHUNK ERSTELLEN
 // =====================================================
 
-function loadChunk(chunk) {
-    if (chunk.mesh) return;
-
+function createChunkData(chunk) {
     const level = chunk.level;
 
     const layers = level === 0
         ? TOP_LAYERS
         : LOWER_LAYERS;
 
-    const capacity =
-        CHUNK_SIZE * CHUNK_SIZE * layers;
-
-    const mesh = new THREE.InstancedMesh(
-        coinGeometry,
-        [goldSide, coinFace],
-        capacity
-    );
-
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-
+    const coins = [];
     const floorY = -level * FLOOR_HEIGHT;
-
-    let index = 0;
 
     for (
         let iz = chunk.cz * CHUNK_SIZE;
@@ -616,34 +820,76 @@ function loadChunk(chunk) {
                 layer < cellCounts[level][cell];
                 layer++
             ) {
-                const y =
-                    floorY +
-                    COIN_THICKNESS * (layer + 0.5);
-
-                tempObject.position.set(pos.x, y, pos.z);
-                tempObject.rotation.set(0, 0, 0);
-                tempObject.updateMatrix();
-
-                mesh.setMatrixAt(index, tempObject.matrix);
-
-                chunk.coins.push({
-                    localId: index,
+                coins.push({
+                    localId: coins.length,
+                    layer,
                     x: pos.x,
-                    y,
+                    y: floorY + COIN_THICKNESS * (layer + 0.5),
                     z: pos.z,
+                    rotation: null,
+                    velocity: null,
+                    angularVelocity: null,
                     body: null,
                     collected: false
                 });
-
-                index++;
             }
         }
     }
 
+    return coins;
+}
+
+function setCoinMatrix(mesh, coin) {
+    if (coin.collected) {
+        tempObject.position.set(0, -1000, 0);
+        tempObject.scale.set(0, 0, 0);
+        tempObject.quaternion.identity();
+    } else {
+        tempObject.position.set(coin.x, coin.y, coin.z);
+        tempObject.scale.set(1, 1, 1);
+
+        if (coin.rotation) {
+            tempObject.quaternion.set(
+                coin.rotation.x,
+                coin.rotation.y,
+                coin.rotation.z,
+                coin.rotation.w
+            );
+        } else {
+            tempObject.quaternion.identity();
+        }
+    }
+
+    tempObject.updateMatrix();
+    mesh.setMatrixAt(coin.localId, tempObject.matrix);
+}
+
+function loadChunk(chunk) {
+    if (chunk.mesh) return;
+
+    if (!chunk.coins) {
+        chunk.coins = createChunkData(chunk);
+    }
+
+    const mesh = new THREE.InstancedMesh(
+        coinGeometry,
+        [goldSide, coinFace],
+        chunk.coins.length
+    );
+
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+
+    mesh.userData.chunk = chunk;
+
+    for (const coin of chunk.coins) {
+        setCoinMatrix(mesh, coin);
+    }
+
     mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
 
     scene.add(mesh);
-
     chunk.mesh = mesh;
 }
 
@@ -652,15 +898,19 @@ function loadChunk(chunk) {
 // =====================================================
 
 function activateNearbyCoins() {
+    if (activeCoins.size >= MAX_ACTIVE_BODIES) return;
+
     const radiusSq = PHYSICS_RADIUS * PHYSICS_RADIUS;
 
     for (const floorChunks of chunks) {
         for (const chunk of floorChunks) {
-            if (!chunk.mesh) continue;
+            if (!chunk.mesh || !chunk.mesh.visible) continue;
+            if (!chunk.coins) continue;
 
             for (const coin of chunk.coins) {
-                if (coin.collected) continue;
-                if (coin.body) continue;
+                if (activeCoins.size >= MAX_ACTIVE_BODIES) return;
+
+                if (coin.collected || coin.body) continue;
 
                 const dx = coin.x - player.position.x;
                 const dy = coin.y - player.position.y;
@@ -671,50 +921,13 @@ function activateNearbyCoins() {
                     radiusSq
                 ) continue;
 
-                const physicsCoin = createPhysicsCoin(
-                    coin.x,
-                    coin.y,
-                    coin.z,
-                    chunk,
-                    coin.localId
-                );
+                // Nur Münzen in erreichbarer Höhe aktivieren.
+                if (Math.abs(dy) > 2.8) continue;
 
-                if (!physicsCoin) return;
-
-                coin.body = physicsCoin;
+                createPhysicsCoin(coin);
             }
         }
     }
-}
-
-// =====================================================
-// PHYSIK PAUSIEREN
-// =====================================================
-
-function freezeCoin(coin) {
-    if (!coin.body) return;
-
-    const body = coin.body.body;
-
-    const p = body.translation();
-    const r = body.rotation();
-
-    coin.x = p.x;
-    coin.y = p.y;
-    coin.z = p.z;
-
-    coin.rotation = {
-        x: r.x,
-        y: r.y,
-        z: r.z,
-        w: r.w
-    };
-
-    world.removeRigidBody(body);
-
-    activeCoins.delete(coin.body.id);
-
-    coin.body = null;
 }
 
 // =====================================================
@@ -724,71 +937,38 @@ function freezeCoin(coin) {
 function updateCoinPhysics() {
     world.step(eventQueue);
 
-    for (const floorChunks of chunks) {
-        for (const chunk of floorChunks) {
-            if (!chunk.mesh) continue;
+    for (const coin of activeCoins) {
+        if (!coin.body) continue;
 
-            for (const coin of chunk.coins) {
-                if (coin.collected) continue;
+        const p = coin.body.translation();
+        const r = coin.body.rotation();
 
-                let x = coin.x;
-                let y = coin.y;
-                let z = coin.z;
+        coin.x = p.x;
+        coin.y = p.y;
+        coin.z = p.z;
 
-                let rotation = null;
+        coin.rotation = {
+            x: r.x,
+            y: r.y,
+            z: r.z,
+            w: r.w
+        };
 
-                if (coin.body) {
-                    const body = coin.body.body;
+        const chunk = getChunk(
+            getCurrentFloor(),
+            getCell(coin.x, coin.z) || { index: 0 }
+        );
 
-                    const p = body.translation();
-                    const r = body.rotation();
-
-                    x = p.x;
-                    y = p.y;
-                    z = p.z;
-
-                    rotation = r;
-
-                    coin.x = x;
-                    coin.y = y;
-                    coin.z = z;
-                }
-
-                tempObject.position.set(x, y, z);
-
-                if (rotation) {
-                    tempObject.quaternion.set(
-                        rotation.x,
-                        rotation.y,
-                        rotation.z,
-                        rotation.w
-                    );
-                } else if (coin.rotation) {
-                    tempObject.quaternion.set(
-                        coin.rotation.x,
-                        coin.rotation.y,
-                        coin.rotation.z,
-                        coin.rotation.w
-                    );
-                } else {
-                    tempObject.quaternion.identity();
-                }
-
-                tempObject.updateMatrix();
-
-                chunk.mesh.setMatrixAt(
-                    coin.localId,
-                    tempObject.matrix
-                );
-            }
-
-            chunk.mesh.instanceMatrix.needsUpdate = true;
+        // Die Münze wird über ihre eigene Chunk-Referenz aktualisiert.
+        if (coin.chunk && coin.chunk.mesh) {
+            setCoinMatrix(coin.chunk.mesh, coin);
+            coin.chunk.mesh.instanceMatrix.needsUpdate = true;
         }
     }
 }
 
 // =====================================================
-// SICHTFELD
+// SICHTFELD / CHUNK-STREAMING
 // =====================================================
 
 const frustum = new THREE.Frustum();
@@ -796,9 +976,7 @@ const viewProjection = new THREE.Matrix4();
 
 function getCurrentFloor() {
     return clamp(
-        Math.round(
-            (1.7 - player.position.y) / FLOOR_HEIGHT
-        ),
+        Math.round((1.7 - player.position.y) / FLOOR_HEIGHT),
         0,
         FLOOR_COUNT - 1
     );
@@ -824,7 +1002,6 @@ function updateVisibility() {
     frustum.setFromProjectionMatrix(viewProjection);
 
     const level = getCurrentFloor();
-
     let loads = 0;
 
     for (let floor = 0; floor < FLOOR_COUNT; floor++) {
@@ -861,13 +1038,7 @@ function updateVisibility() {
             if (!visible) {
                 if (chunk.mesh) {
                     chunk.mesh.visible = false;
-
-                    // Physik der nicht sichtbaren Münzen einfrieren.
-                    for (const coin of chunk.coins) {
-                        if (coin.body) {
-                            freezeCoin(coin);
-                        }
-                    }
+                    freezeChunk(chunk);
                 }
 
                 continue;
@@ -886,8 +1057,7 @@ function updateVisibility() {
         }
     }
 
-    // Alte Chunks entfernen
-
+    // Nicht sichtbare Chunks bei Bedarf aus dem Speicher der GPU nehmen.
     const loaded = [];
 
     for (const floorChunks of chunks) {
@@ -902,15 +1072,11 @@ function updateVisibility() {
             .sort((a, b) => a.lastSeen - b.lastSeen)
             .slice(0, loaded.length - MAX_LOADED_CHUNKS)
             .forEach(chunk => {
+                freezeChunk(chunk);
+
                 scene.remove(chunk.mesh);
-
-                for (const coin of chunk.coins) {
-                    if (coin.body) freezeCoin(coin);
-                }
-
-                chunk.mesh.geometry.dispose();
+                chunk.mesh.dispose?.();
                 chunk.mesh = null;
-                chunk.coins = [];
             });
     }
 }
@@ -919,10 +1085,10 @@ function updateVisibility() {
 // MÜNZEN EINSAMMELN
 // =====================================================
 
+const raycaster = new THREE.Raycaster();
+
 function collectCoin() {
     if (!locked) return;
-
-    const raycaster = new THREE.Raycaster();
 
     raycaster.setFromCamera(
         new THREE.Vector2(0, 0),
@@ -947,11 +1113,9 @@ function collectCoin() {
 
     if (hit.distance > 4.5) return;
 
-    const chunk = chunks.flat().find(
-        c => c.mesh === hit.object
-    );
+    const chunk = hit.object.userData.chunk;
 
-    if (!chunk) return;
+    if (!chunk || !chunk.coins) return;
 
     const coin = chunk.coins[hit.instanceId];
 
@@ -965,22 +1129,15 @@ function collectCoin() {
     coin.collected = true;
 
     if (coin.body) {
-        freezeCoin(coin);
+        world.removeRigidBody(coin.body);
+        activeCoins.delete(coin);
+        coin.body = null;
     }
 
-    const matrix = new THREE.Matrix4();
-
-    matrix.makeScale(0, 0, 0);
-
-    chunk.mesh.setMatrixAt(
-        coin.localId,
-        matrix
-    );
-
+    setCoinMatrix(chunk.mesh, coin);
     chunk.mesh.instanceMatrix.needsUpdate = true;
 
     addCoins(1);
-
     showMessage("+1 Coin");
 }
 
@@ -989,7 +1146,6 @@ function collectCoin() {
 // =====================================================
 
 const conveyor = new THREE.Group();
-
 scene.add(conveyor);
 
 function conveyorBox(w, h, d, material, x, y, z) {
@@ -1004,19 +1160,60 @@ function conveyorBox(w, h, d, material, x, y, z) {
     return mesh;
 }
 
-conveyorBox(
-    1.8, 0.3, 3.5,
-    steel,
-    0, 0, 0
-);
-
-conveyorBox(
-    1.5, 0.12, 3.3,
-    darkSteel,
-    0, 0.2, 0
-);
+conveyorBox(2, 0.35, 4, darkSteel, 0, 0, 0);
+conveyorBox(1.65, 0.12, 3.7, steel, 0, 0.22, 0);
 
 conveyor.position.set(-8, 1, -5);
+
+// Rollen
+
+const beltRollers = [];
+
+for (let i = 0; i < 6; i++) {
+    const roller = new THREE.Mesh(
+        new THREE.CylinderGeometry(
+            0.12,
+            0.12,
+            1.8,
+            16
+        ),
+        steel
+    );
+
+    roller.rotation.z = Math.PI / 2;
+    roller.position.set(
+        0,
+        0.1,
+        -1.65 + i * 0.66
+    );
+
+    conveyor.add(roller);
+    beltRollers.push(roller);
+}
+
+// Laufbandstreifen
+
+const beltLines = [];
+
+for (let i = 0; i < 12; i++) {
+    const line = new THREE.Mesh(
+        new THREE.BoxGeometry(1.55, 0.025, 0.07),
+        darkSteel
+    );
+
+    line.position.set(
+        0,
+        0.3,
+        -1.75 + i * 0.31
+    );
+
+    conveyor.add(line);
+    beltLines.push(line);
+}
+
+// =====================================================
+// FÖRDERBAND-MÜNZEN
+// =====================================================
 
 const beltCoins = [];
 
@@ -1024,38 +1221,28 @@ const beltCoinGeometry = new THREE.CylinderGeometry(
     0.16,
     0.16,
     0.07,
-    16
+    20
 );
 
 function spawnBeltCoin() {
-    if (beltCoins.length >= 25) {
-        const old = beltCoins.shift();
+    if (beltCoins.length >= 24) return;
 
-        scene.remove(old.mesh);
-        world.removeRigidBody(old.body);
-
-        old.mesh.geometry.dispose();
-    }
-
-    const x = -8 + rand(-0.45, 0.45);
+    const x = -8 + rand(-0.4, 0.4);
     const y = 1.55;
-    const z = -6.2;
+    const z = -6.5;
 
     const body = world.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(x, y, z)
-            .setLinearDamping(0.1)
-            .setAngularDamping(0.15)
+            .setLinearDamping(0.12)
+            .setAngularDamping(0.2)
     );
 
     world.createCollider(
-        RAPIER.ColliderDesc.cylinder(
-            0.035,
-            0.16
-        )
+        RAPIER.ColliderDesc.cylinder(0.035, 0.16)
             .setDensity(7)
-            .setFriction(0.65)
-            .setRestitution(0.12),
+            .setFriction(0.7)
+            .setRestitution(0.15),
         body
     );
 
@@ -1065,28 +1252,19 @@ function spawnBeltCoin() {
     );
 
     mesh.position.set(x, y, z);
-
     scene.add(mesh);
 
-    // Das Förderband gibt der Münze Bewegung.
+    body.setLinvel({
+        x: rand(-0.1, 0.1),
+        y: 0.2,
+        z: 2.7
+    }, true);
 
-    body.setLinvel(
-        {
-            x: 0,
-            y: 0.2,
-            z: 2.5
-        },
-        true
-    );
-
-    body.setAngvel(
-        {
-            x: rand(-1, 1),
-            y: rand(-2, 2),
-            z: rand(-1, 1)
-        },
-        true
-    );
+    body.setAngvel({
+        x: rand(-1, 1),
+        y: rand(-2, 2),
+        z: rand(-1, 1)
+    }, true);
 
     beltCoins.push({
         body,
@@ -1113,7 +1291,7 @@ function updateBeltCoins(dt) {
             r.w
         );
 
-        if (coin.age > 4 || p.z > -1) {
+        if (coin.age > 5 || p.z > -1) {
             scene.remove(coin.mesh);
             world.removeRigidBody(coin.body);
 
@@ -1123,7 +1301,7 @@ function updateBeltCoins(dt) {
 }
 
 // =====================================================
-// MÜNZEN EINZAHLEN
+// EINZAHLEN
 // =====================================================
 
 function showMessage(text) {
@@ -1138,11 +1316,11 @@ function showMessage(text) {
 
     window.messageTimeout = setTimeout(() => {
         el.style.opacity = "0";
-    }, 1500);
+    }, 1600);
 }
 
-let depositTimer = 0;
-let depositAmount = 0;
+let beltSpawnQueue = 0;
+let beltSpawnTimer = 0;
 
 function depositCoins() {
     const distance = player.position.distanceTo(
@@ -1159,19 +1337,11 @@ function depositCoins() {
     }
 
     money += amount;
-
     inventory.fill(0);
 
-    depositAmount = Math.min(amount, 25);
-    depositTimer = 0;
-
-    // Münzen sichtbar auf das Förderband legen.
-
-    for (let i = 0; i < depositAmount; i++) {
-        setTimeout(() => {
-            spawnBeltCoin();
-        }, i * 90);
-    }
+    // Sichtbare Münzen werden nacheinander erzeugt.
+    beltSpawnQueue = Math.min(amount, 24);
+    beltSpawnTimer = 0;
 
     updateHUD();
 
@@ -1179,6 +1349,19 @@ function depositCoins() {
         amount.toLocaleString("de-DE") +
         " Coins eingezahlt!"
     );
+}
+
+function updateDepositAnimation(dt) {
+    if (beltSpawnQueue <= 0) return;
+
+    beltSpawnTimer += dt;
+
+    if (beltSpawnTimer >= 0.12) {
+        beltSpawnTimer = 0;
+
+        spawnBeltCoin();
+        beltSpawnQueue--;
+    }
 }
 
 // =====================================================
@@ -1226,8 +1409,6 @@ function updatePlayer(dt) {
         11.4
     );
 
-    // Boden und Treppe
-
     const level = getCurrentFloor();
 
     let ground = -level * FLOOR_HEIGHT;
@@ -1248,9 +1429,7 @@ function updatePlayer(dt) {
     player.velocity.y -= 20 * dt;
     player.position.y += player.velocity.y * dt;
 
-    if (
-        player.position.y <= ground + player.height
-    ) {
+    if (player.position.y <= ground + player.height) {
         player.position.y = ground + player.height;
         player.velocity.y = 0;
         player.grounded = true;
@@ -1272,7 +1451,11 @@ function updatePlayer(dt) {
 document.addEventListener("keydown", e => {
     keys[e.code] = true;
 
-    if (e.code === "Space" && player.grounded) {
+    if (
+        e.code === "Space" &&
+        player.grounded &&
+        locked
+    ) {
         player.velocity.y = 6;
         player.grounded = false;
     }
@@ -1334,17 +1517,18 @@ document.addEventListener("pointerlockchange", () => {
     if (screen) {
         screen.style.display = locked ? "none" : "flex";
     }
+
+    crosshair.style.display = locked ? "block" : "none";
 });
 
 // =====================================================
-// PHYSIK UND SICHTFELD ZEITPLAN
+// ANIMATION
 // =====================================================
 
 let lastTime = 0;
 let visibilityTimer = 0;
 let physicsTimer = 0;
 let activationTimer = 0;
-
 let animationTime = 0;
 
 function animate(time) {
@@ -1370,18 +1554,31 @@ function animate(time) {
             updateVisibility();
         }
 
-        if (activationTimer >= 0.2) {
+        if (activationTimer >= 0.25) {
             activationTimer = 0;
             activateNearbyCoins();
         }
 
         if (physicsTimer >= 1 / 60) {
             physicsTimer = 0;
-
             updateCoinPhysics();
         }
     }
 
+    // Laufband bewegt sich sichtbar.
+    for (const line of beltLines) {
+        line.position.z += dt * 2.7;
+
+        if (line.position.z > 1.9) {
+            line.position.z = -1.75;
+        }
+    }
+
+    for (const roller of beltRollers) {
+        roller.rotation.x += dt * 3;
+    }
+
+    updateDepositAnimation(dt);
     updateBeltCoins(dt);
 
     renderer.render(scene, camera);

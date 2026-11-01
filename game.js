@@ -9,6 +9,7 @@ const FLOOR_HEIGHT = 8;
 
 const GRID_SIZE = 55;
 const CELL_SIZE = 0.4;
+const WORLD_SIZE = GRID_SIZE * CELL_SIZE;
 
 const COIN_DIAMETER = 0.376;
 const COIN_THICKNESS = 0.1;
@@ -17,13 +18,10 @@ const LOWER_LAYERS = 80;
 const TOP_LAYERS = 4;
 
 const CHUNK_SIZE = 5;
-const CHUNKS_PER_SIDE = GRID_SIZE / CHUNK_SIZE;
+const CHUNKS_PER_SIDE = 11;
 
-const COINS_PER_LOWER_FLOOR =
-    GRID_SIZE * GRID_SIZE * LOWER_LAYERS;
-
-const COINS_ON_TOP_FLOOR =
-    GRID_SIZE * GRID_SIZE * TOP_LAYERS;
+const COINS_PER_LOWER_FLOOR = GRID_SIZE * GRID_SIZE * LOWER_LAYERS;
+const COINS_ON_TOP_FLOOR = GRID_SIZE * GRID_SIZE * TOP_LAYERS;
 
 const TOTAL_COINS =
     (FLOOR_COUNT - 1) * COINS_PER_LOWER_FLOOR +
@@ -32,9 +30,11 @@ const TOTAL_COINS =
 const SLOT_COUNT = 15;
 const STACK_LIMIT = 9999;
 
-// =====================================================
-// THREE.JS
-// =====================================================
+// Performance
+const MAX_LOADED_CHUNKS = 40;
+const MAX_CHUNK_LOADS_PER_UPDATE = 2;
+
+let chunkClock = 0;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x171918);
@@ -48,12 +48,12 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 const renderer = new THREE.WebGLRenderer({
-    antialias: true,
+    antialias: false,
     powerPreference: "high-performance"
 });
 
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1));
 renderer.shadowMap.enabled = false;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
@@ -198,8 +198,8 @@ function createBox(
     );
 
     mesh.position.set(x, y, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
 
     parent.add(mesh);
 
@@ -226,6 +226,8 @@ createBox(24, 65, 1, concrete, 0, -24, 12);
 for (let level = 0; level < FLOOR_COUNT; level++) {
     const y = -level * FLOOR_HEIGHT;
 
+    // Etagenböden mit Treppenöffnung
+
     createBox(
         18.5, 0.7, 24,
         floorMaterial,
@@ -238,16 +240,24 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
         11.25, y - 0.35, 0
     );
 
+    // Wandverstärkungen
+
     for (let z = -9; z <= 9; z += 3) {
         createBox(0.16, 7.5, 0.16, steel, -11.3, y + 3.5, z);
         createBox(0.16, 7.5, 0.16, steel, 11.3, y + 3.5, z);
     }
 
+    // Lampen
+
     for (const side of [-1, 1]) {
         for (const z of [-8, 0, 8]) {
             const x = side * 11.3;
 
-            createBox(0.25, 0.65, 0.5, steel, x, y + 3.5, z);
+            createBox(
+                0.25, 0.65, 0.5,
+                steel,
+                x, y + 3.5, z
+            );
 
             const bulb = new THREE.Mesh(
                 new THREE.BoxGeometry(0.12, 0.35, 0.28),
@@ -266,15 +276,19 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
 
             scene.add(bulb);
 
-            addPointLight(
-                x - side * 0.7,
-                y + 3.5,
-                z,
-                48,
-                13
-            );
+            if (z === 0) {
+                addPointLight(
+                    x - side * 0.7,
+                    y + 3.5,
+                    z,
+                    42,
+                    12
+                );
+            }
         }
     }
+
+    // Rohre
 
     for (const x of [-10.7, 10.7]) {
         const pipe = new THREE.Mesh(
@@ -288,7 +302,7 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
 }
 
 // =====================================================
-// TREPPEN MIT EINZELNEN STUFEN
+// TREPPE: 32 EINZELNE STUFEN
 // =====================================================
 
 const stairMaterial = new THREE.MeshStandardMaterial({
@@ -352,13 +366,11 @@ for (let level = 0; level < FLOOR_COUNT - 1; level++) {
         scene.add(nosing);
     }
 
+    // Geländer
+
     for (const side of [-1, 1]) {
         const rail = new THREE.Mesh(
-            new THREE.BoxGeometry(
-                0.12,
-                0.75,
-                STAIR_LENGTH
-            ),
+            new THREE.BoxGeometry(0.12, 0.75, STAIR_LENGTH),
             steel
         );
 
@@ -368,10 +380,7 @@ for (let level = 0; level < FLOOR_COUNT - 1; level++) {
             0
         );
 
-        rail.rotation.x = Math.atan(
-            FLOOR_HEIGHT / STAIR_LENGTH
-        );
-
+        rail.rotation.x = Math.atan(FLOOR_HEIGHT / STAIR_LENGTH);
         scene.add(rail);
 
         for (let i = 0; i <= 7; i++) {
@@ -393,7 +402,7 @@ for (let level = 0; level < FLOOR_COUNT - 1; level++) {
 }
 
 // =====================================================
-// MÜNZEN: 1.464.100 COINS
+// MÜNZEN UND CHUNKS
 // =====================================================
 
 const dummy = new THREE.Object3D();
@@ -414,22 +423,17 @@ function getCellWorld(ix, iz) {
     };
 }
 
+// Etagen und Chunks vorbereiten.
+// Die Münz-Meshes selbst werden noch NICHT erstellt.
+
 for (let level = 0; level < FLOOR_COUNT; level++) {
     const layers = level === 0
         ? TOP_LAYERS
         : LOWER_LAYERS;
 
-    const counts = new Uint8Array(
-        GRID_SIZE * GRID_SIZE
-    );
-
-    const starts = new Uint32Array(
-        GRID_SIZE * GRID_SIZE
-    );
-
-    const chunkIds = new Uint16Array(
-        GRID_SIZE * GRID_SIZE
-    );
+    const counts = new Uint8Array(GRID_SIZE * GRID_SIZE);
+    const starts = new Uint32Array(GRID_SIZE * GRID_SIZE);
+    const chunkIds = new Uint16Array(GRID_SIZE * GRID_SIZE);
 
     const floorChunks = [];
     const floorY = -level * FLOOR_HEIGHT;
@@ -438,8 +442,7 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
 
     for (let cz = 0; cz < CHUNKS_PER_SIDE; cz++) {
         for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
-            const chunkIndex =
-                cz * CHUNKS_PER_SIDE + cx;
+            const chunkIndex = cz * CHUNKS_PER_SIDE + cx;
 
             const minCellX = cx * CHUNK_SIZE;
             const minCellZ = cz * CHUNK_SIZE;
@@ -454,26 +457,20 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
                     ix < minCellX + CHUNK_SIZE;
                     ix++
                 ) {
-                    chunkIds[cellIndex(ix, iz)] =
-                        chunkIndex;
+                    chunkIds[cellIndex(ix, iz)] = chunkIndex;
                 }
             }
 
-            const minX =
-                -11 + cx * CHUNK_SIZE * CELL_SIZE;
+            const minX = -11 + cx * CHUNK_SIZE * CELL_SIZE;
+            const minZ = -11 + cz * CHUNK_SIZE * CELL_SIZE;
 
-            const minZ =
-                -11 + cz * CHUNK_SIZE * CELL_SIZE;
-
-            const maxX =
-                minX + CHUNK_SIZE * CELL_SIZE;
-
-            const maxZ =
-                minZ + CHUNK_SIZE * CELL_SIZE;
+            const maxX = minX + CHUNK_SIZE * CELL_SIZE;
+            const maxZ = minZ + CHUNK_SIZE * CELL_SIZE;
 
             floorChunks.push({
                 mesh: null,
                 remaining: CHUNK_SIZE * CHUNK_SIZE * layers,
+                lastSeen: 0,
                 level,
                 chunkIndex,
                 cx,
@@ -502,6 +499,10 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
     coinChunks.push(floorChunks);
 }
 
+// =====================================================
+// ZELLE UND CHUNK FINDEN
+// =====================================================
+
 function worldToCell(x, z) {
     const ix = Math.floor((x + 11) / CELL_SIZE);
     const iz = Math.floor((z + 11) / CELL_SIZE);
@@ -529,7 +530,7 @@ function getChunkForCell(level, cell) {
 }
 
 // =====================================================
-// CHUNKS LADEN
+// CHUNK ERSTELLEN
 // =====================================================
 
 function ensureChunkLoaded(chunk) {
@@ -540,6 +541,8 @@ function ensureChunkLoaded(chunk) {
     const layers = level === 0
         ? TOP_LAYERS
         : LOWER_LAYERS;
+
+    chunk.lastSeen = ++chunkClock;
 
     const floorY = -level * FLOOR_HEIGHT;
 
@@ -552,9 +555,7 @@ function ensureChunkLoaded(chunk) {
         capacity
     );
 
-    mesh.instanceMatrix.setUsage(
-        THREE.DynamicDrawUsage
-    );
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
     mesh.castShadow = false;
     mesh.receiveShadow = false;
@@ -587,8 +588,7 @@ function ensureChunkLoaded(chunk) {
             ) {
                 dummy.position.set(
                     pos.x,
-                    floorY +
-                        COIN_THICKNESS * (layer + 0.5),
+                    floorY + COIN_THICKNESS * (layer + 0.5),
                     pos.z
                 );
 
@@ -601,10 +601,7 @@ function ensureChunkLoaded(chunk) {
                 dummy.scale.set(1, 1, 1);
                 dummy.updateMatrix();
 
-                mesh.setMatrixAt(
-                    localId,
-                    dummy.matrix
-                );
+                mesh.setMatrixAt(localId, dummy.matrix);
 
                 localId++;
             }
@@ -613,15 +610,17 @@ function ensureChunkLoaded(chunk) {
 
     mesh.count = localId;
     mesh.instanceMatrix.needsUpdate = true;
+
     mesh.computeBoundingSphere();
     mesh.visible = true;
 
     scene.add(mesh);
+
     chunk.mesh = mesh;
 }
 
 // =====================================================
-// SICHTBARKEIT DER CHUNKS
+// SICHTFELD UND CHUNK-VERWALTUNG
 // =====================================================
 
 const coinFrustum = new THREE.Frustum();
@@ -646,11 +645,11 @@ function updateCoinVisibility() {
         coinViewProjection
     );
 
-    for (
-        let floor = 0;
-        floor < FLOOR_COUNT;
-        floor++
-    ) {
+    let loadsThisPass = 0;
+
+    // Nur sichtbare Etagen berücksichtigen.
+
+    for (let floor = 0; floor < FLOOR_COUNT; floor++) {
         const showFloor =
             floor === level ||
             (
@@ -659,10 +658,7 @@ function updateCoinVisibility() {
             );
 
         for (const chunk of coinChunks[floor]) {
-            if (
-                !showFloor ||
-                chunk.remaining <= 0
-            ) {
+            if (!showFloor || chunk.remaining <= 0) {
                 if (chunk.mesh) {
                     chunk.mesh.visible = false;
                 }
@@ -670,24 +666,71 @@ function updateCoinVisibility() {
                 continue;
             }
 
-            const inView =
-                coinFrustum.intersectsBox(chunk.box);
+            const inView = coinFrustum.intersectsBox(
+                chunk.box
+            );
 
-            if (inView) {
-                ensureChunkLoaded(chunk);
-
+            if (!inView) {
                 if (chunk.mesh) {
-                    chunk.mesh.visible = true;
+                    chunk.mesh.visible = false;
                 }
-            } else if (chunk.mesh) {
-                chunk.mesh.visible = false;
+
+                continue;
+            }
+
+            chunk.lastSeen = ++chunkClock;
+
+            // Maximal zwei neue Chunks pro Durchlauf.
+
+            if (
+                !chunk.mesh &&
+                loadsThisPass < MAX_CHUNK_LOADS_PER_UPDATE
+            ) {
+                ensureChunkLoaded(chunk);
+                loadsThisPass++;
+            }
+
+            if (chunk.mesh) {
+                chunk.mesh.visible = true;
             }
         }
+    }
+
+    // Geladene Chunks zählen.
+
+    const loaded = [];
+
+    for (const floorChunks of coinChunks) {
+        for (const chunk of floorChunks) {
+            if (chunk.mesh) {
+                loaded.push(chunk);
+            }
+        }
+    }
+
+    // Alte, unsichtbare Chunks entfernen.
+
+    let excess = loaded.length - MAX_LOADED_CHUNKS;
+
+    if (excess > 0) {
+        loaded
+            .filter(chunk => !chunk.mesh.visible)
+            .sort((a, b) => a.lastSeen - b.lastSeen)
+            .some(chunk => {
+                if (excess <= 0) return true;
+
+                scene.remove(chunk.mesh);
+
+                chunk.mesh = null;
+                excess--;
+
+                return false;
+            });
     }
 }
 
 // =====================================================
-// SPIELER
+// SPIELER UND INVENTAR
 // =====================================================
 
 const player = {
@@ -707,9 +750,7 @@ function getCurrentFloor() {
         )
     ) {
         const progress = clamp(
-            (
-                player.position.z - STAIR_START_Z
-            ) / STAIR_LENGTH,
+            (player.position.z - STAIR_START_Z) / STAIR_LENGTH,
             0,
             1
         );
@@ -754,22 +795,18 @@ let selectedSlot = 0;
 let heldCoins = 0;
 
 // =====================================================
-// INVENTAR
+// MÜNZEN INS INVENTAR
 // =====================================================
 
 function addCoins(amount) {
     let remaining = amount;
 
     for (let i = 0; i < SLOT_COUNT; i++) {
-        const free =
-            STACK_LIMIT - inventory[i];
+        const free = STACK_LIMIT - inventory[i];
 
         if (free <= 0) continue;
 
-        const add = Math.min(
-            free,
-            remaining
-        );
+        const add = Math.min(free, remaining);
 
         inventory[i] += add;
         remaining -= add;
@@ -782,8 +819,13 @@ function addCoins(amount) {
     return amount - remaining;
 }
 
+// =====================================================
+// INVENTAR ANZEIGEN
+// =====================================================
+
 function renderInventory() {
     const ui = document.getElementById("inventory");
+
     if (!ui) return;
 
     ui.innerHTML = "";
@@ -793,11 +835,7 @@ function renderInventory() {
 
         slot.className =
             "slot" +
-            (
-                index === selectedSlot
-                    ? " active"
-                    : ""
-            );
+            (index === selectedSlot ? " active" : "");
 
         slot.innerHTML = `
             <span class="slot-number">${index + 1}</span>
@@ -809,17 +847,18 @@ function renderInventory() {
     });
 }
 
+// =====================================================
+// HUD
+// =====================================================
+
 function updateHUD() {
     heldCoins = inventory.reduce(
         (a, b) => a + b,
         0
     );
 
-    const moneyUI =
-        document.getElementById("money");
-
-    const heldUI =
-        document.getElementById("held");
+    const moneyUI = document.getElementById("money");
+    const heldUI = document.getElementById("held");
 
     const progressText =
         document.getElementById("progressText");
@@ -874,17 +913,10 @@ function findTargetCoin() {
     let best = null;
     let bestDistance = Infinity;
 
-    for (
-        let level = 0;
-        level < FLOOR_COUNT;
-        level++
-    ) {
-        const floorVisible =
-            coinChunks[level]?.some(
-                chunk =>
-                    chunk.mesh &&
-                    chunk.mesh.visible
-            );
+    for (let level = 0; level < FLOOR_COUNT; level++) {
+        const floorVisible = coinChunks[level].some(
+            chunk => chunk.mesh && chunk.mesh.visible
+        );
 
         if (!floorVisible) continue;
 
@@ -900,8 +932,7 @@ function findTargetCoin() {
             layer--
         ) {
             const planeY =
-                floorY +
-                COIN_THICKNESS * (layer + 1);
+                floorY + COIN_THICKNESS * (layer + 1);
 
             horizontalPlane.constant = -planeY;
 
@@ -930,8 +961,7 @@ function findTargetCoin() {
                 continue;
             }
 
-            const chunk =
-                getChunkForCell(level, cell);
+            const chunk = getChunkForCell(level, cell);
 
             if (
                 !chunk.mesh ||
@@ -968,30 +998,26 @@ function collectCoin() {
     if (!locked) return;
 
     const target = findTargetCoin();
+
     if (!target) return;
 
     const { level, cell } = target;
 
-    const count =
-        cellCounts[level][cell.index];
+    const count = cellCounts[level][cell.index];
 
     if (count <= 0) return;
 
-    if (
-        heldCoins >= SLOT_COUNT * STACK_LIMIT
-    ) {
+    if (heldCoins >= SLOT_COUNT * STACK_LIMIT) {
         showMessage("Inventar ist voll!");
         return;
     }
 
-    const chunk =
-        getChunkForCell(level, cell);
+    const chunk = getChunkForCell(level, cell);
 
     if (!chunk.mesh) return;
 
     const localId =
-        cellStarts[level][cell.index] +
-        count - 1;
+        cellStarts[level][cell.index] + count - 1;
 
     cellCounts[level][cell.index]--;
 
@@ -1038,11 +1064,7 @@ const particles = [];
 function createPickupEffect(x, y, z) {
     for (let i = 0; i < 5; i++) {
         const particle = new THREE.Mesh(
-            new THREE.SphereGeometry(
-                0.035,
-                8,
-                8
-            ),
+            new THREE.SphereGeometry(0.035, 8, 8),
             new THREE.MeshBasicMaterial({
                 color: 0xffd45c
             })
@@ -1088,6 +1110,7 @@ function updateParticles(dt) {
 
         if (p.userData.life <= 0) {
             scene.remove(p);
+
             p.geometry.dispose();
             p.material.dispose();
 
@@ -1129,6 +1152,8 @@ createBox(
     machine
 );
 
+// Metallrahmen
+
 for (const x of [-1.15, 1.15]) {
     createBox(
         0.12, 2.5, 0.12,
@@ -1137,6 +1162,8 @@ for (const x of [-1.15, 1.15]) {
         machine
     );
 }
+
+// Einwurfschacht
 
 createBox(
     1.15, 0.12, 0.7,
@@ -1147,25 +1174,22 @@ createBox(
 
 // Display
 
-const displayCanvas =
-    document.createElement("canvas");
+const displayCanvas = document.createElement("canvas");
 
 displayCanvas.width = 512;
 displayCanvas.height = 192;
 
-const displayContext =
-    displayCanvas.getContext("2d");
+const displayContext = displayCanvas.getContext("2d");
 
 const displayTexture =
     new THREE.CanvasTexture(displayCanvas);
 
-const displayMaterial =
-    new THREE.MeshStandardMaterial({
-        map: displayTexture,
-        emissive: 0x0bff83,
-        emissiveMap: displayTexture,
-        emissiveIntensity: 0.7
-    });
+const displayMaterial = new THREE.MeshStandardMaterial({
+    map: displayTexture,
+    emissive: 0x0bff83,
+    emissiveMap: displayTexture,
+    emissiveIntensity: 0.7
+});
 
 const displayPanel = new THREE.Mesh(
     new THREE.BoxGeometry(1.7, 0.65, 0.08),
@@ -1175,13 +1199,14 @@ const displayPanel = new THREE.Mesh(
 displayPanel.position.set(0, 2.05, 0.89);
 machine.add(displayPanel);
 
+// Display aktualisieren
+
 function updateMachineDisplay() {
     displayContext.fillStyle = "#03140c";
     displayContext.fillRect(0, 0, 512, 192);
 
     displayContext.fillStyle = "#48ff9b";
     displayContext.font = "bold 27px Arial";
-
     displayContext.fillText(
         "COIN COUNTER",
         24,
@@ -1218,6 +1243,8 @@ createBox(
     machine
 );
 
+// Förderbandstreifen
+
 const beltStripes = [];
 
 for (let i = 0; i < 9; i++) {
@@ -1253,7 +1280,7 @@ for (const z of [0.8, 3.4]) {
     rollers.push(roller);
 }
 
-// Licht an der Maschine
+// Leuchtanzeigen
 
 const machineBulb = new THREE.PointLight(
     0x3cff9b,
@@ -1292,7 +1319,7 @@ function showMessage(text) {
 }
 
 // =====================================================
-// EINZAHLEN
+// MÜNZEN EINZAHLEN
 // =====================================================
 
 function depositCoins() {
@@ -1336,7 +1363,7 @@ function depositCoins() {
 }
 
 // =====================================================
-// TREPPEN UND BODEN
+// BODENHÖHE
 // =====================================================
 
 function getGroundHeight(x, z, level) {
@@ -1348,8 +1375,7 @@ function getGroundHeight(x, z, level) {
             cellCounts[0][cell.index];
 
         if (amount > 0) {
-            return floorY +
-                amount * COIN_THICKNESS;
+            return floorY + amount * COIN_THICKNESS;
         }
     }
 
@@ -1360,15 +1386,14 @@ function getGroundHeight(x, z, level) {
             1
         );
 
-        return floorY -
-            progress * FLOOR_HEIGHT;
+        return floorY - progress * FLOOR_HEIGHT;
     }
 
     return floorY;
 }
 
 // =====================================================
-// SPIELERBEWEGUNG
+// SPIELERBEWEGUNG UND KOLLISIONEN
 // =====================================================
 
 function updatePlayer(dt) {
@@ -1416,7 +1441,7 @@ function updatePlayer(dt) {
         11.4
     );
 
-    const level = getCurrentFloor();
+    // Münzstapel-Kollision
 
     const cell = worldToCell(
         player.position.x,
@@ -1426,18 +1451,13 @@ function updatePlayer(dt) {
     let blocked = false;
 
     if (cell) {
-        for (
-            let floor = 0;
-            floor < FLOOR_COUNT;
-            floor++
-        ) {
+        for (let floor = 0; floor < FLOOR_COUNT; floor++) {
             const amount =
                 cellCounts[floor][cell.index];
 
             if (amount <= 0) continue;
 
-            const bottom =
-                -floor * FLOOR_HEIGHT;
+            const bottom = -floor * FLOOR_HEIGHT;
 
             const top =
                 bottom + amount * COIN_THICKNESS;
@@ -1461,7 +1481,7 @@ function updatePlayer(dt) {
         player.position.z = oldZ;
     }
 
-    // Kollision mit Münzzähler
+    // Münzzähler-Kollision
 
     if (
         Math.abs(player.position.x + 8) < 1.65 &&
@@ -1480,16 +1500,12 @@ function updatePlayer(dt) {
     );
 
     player.velocity.y -= 20 * dt;
-
-    player.position.y +=
-        player.velocity.y * dt;
+    player.position.y += player.velocity.y * dt;
 
     if (
         player.position.y <= ground + player.height
     ) {
-        player.position.y =
-            ground + player.height;
-
+        player.position.y = ground + player.height;
         player.velocity.y = 0;
         player.grounded = true;
     } else {
@@ -1501,8 +1517,6 @@ function updatePlayer(dt) {
     camera.rotation.order = "YXZ";
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
-
-    updateCoinVisibility();
 }
 
 // =====================================================
@@ -1510,8 +1524,7 @@ function updatePlayer(dt) {
 // =====================================================
 
 function updateInteraction() {
-    const ui =
-        document.getElementById("interaction");
+    const ui = document.getElementById("interaction");
 
     if (!ui) return;
 
@@ -1526,6 +1539,7 @@ function updateInteraction() {
         ui.innerHTML = "<b>[E]</b> Münzen einzahlen";
 
         targetCell = null;
+
         return;
     }
 
@@ -1627,6 +1641,9 @@ document.addEventListener("pointerlockchange", () => {
 let lastTime = 0;
 let animationTime = 0;
 
+let visibilityTimer = 0;
+let interactionTimer = 0;
+
 function animate(time) {
     requestAnimationFrame(animate);
 
@@ -1640,10 +1657,26 @@ function animate(time) {
 
     if (locked) {
         updatePlayer(dt);
-        updateInteraction();
+
+        visibilityTimer += dt;
+        interactionTimer += dt;
+
+        // Sichtfeldprüfung nur etwa 8-mal pro Sekunde.
+
+        if (visibilityTimer >= 0.12) {
+            visibilityTimer = 0;
+            updateCoinVisibility();
+        }
+
+        // Münzsuche ebenfalls nicht in jedem Frame.
+
+        if (interactionTimer >= 0.12) {
+            interactionTimer = 0;
+            updateInteraction();
+        }
     }
 
-    // Förderband
+    // Förderband bewegen
 
     for (let i = 0; i < beltStripes.length; i++) {
         const stripe = beltStripes[i];
@@ -1656,13 +1689,13 @@ function animate(time) {
             );
     }
 
-    // Rollen
+    // Rollen drehen
 
     for (const roller of rollers) {
         roller.rotation.x += dt * 2.5;
     }
 
-    // Maschinenlicht
+    // Maschinenlicht pulsiert
 
     machineBulb.intensity =
         2.5 + Math.sin(animationTime * 3) * 0.7;
@@ -1678,6 +1711,9 @@ function animate(time) {
 
 updateHUD();
 updateMachineDisplay();
+
+camera.position.copy(player.position);
+
 updateCoinVisibility();
 
 animate(0);

@@ -5,35 +5,37 @@ export class PhysicsSystem {
 
     constructor(options = {}) {
 
+        this.gravity = options.gravity ?? -9.81;
+
         this.maxBodies = options.maxBodies ?? 350;
 
-        this.fixedTimeStep = 1 / 60;
+        this.fixedTimeStep = options.fixedTimeStep ?? 1 / 60;
+        this.maxSubSteps = options.maxSubSteps ?? 8;
+        this.maxFrameTime = options.maxFrameTime ?? 0.1;
+
         this.accumulator = 0;
         this.elapsed = 0;
-
-        this.maxSubSteps = options.maxSubSteps ?? 8;
 
         this.world = null;
         this.eventQueue = null;
 
         this.initialized = false;
-
-        // Aktive dynamische Münzen
-        this.bodies = new Map();
-
-        // Alle registrierten Münzen
-        this.coins = new Map();
-
-        // Statische Körper
-        this.staticBodies = [];
-
-        // Kollisionsflächen für Münzstapel
-        this.coinPiles = new Map();
+        this.initializing = null;
 
         this.nextId = 1;
-        this.nextPileId = 1;
 
-        this.gravity = options.gravity ?? -9.81;
+        this.bodies = new Map();
+        this.coins = new Map();
+        this.coinPiles = new Map();
+        this.staticBodies = new Set();
+
+        this.stats = {
+            steps: 0,
+            activeBodies: 0,
+            totalCoins: 0,
+            pileColliders: 0,
+            droppedTime: 0
+        };
 
         this.defaultCoinOptions = {
             radius: 0.188,
@@ -44,83 +46,131 @@ export class PhysicsSystem {
         };
     }
 
-    // =====================================================
+    // --------------------------------------------------
     // INITIALISIERUNG
-    // =====================================================
+    // --------------------------------------------------
 
     async init() {
 
-        if (this.initialized) return;
+        if (this.initialized) return true;
 
-        await RAPIER.init();
+        if (this.initializing) {
+            return this.initializing;
+        }
 
-        this.world = new RAPIER.World({
-            x: 0,
-            y: this.gravity,
-            z: 0
-        });
+        this.initializing = (async () => {
 
-        this.world.timestep = this.fixedTimeStep;
+            await RAPIER.init();
 
-        const parameters = this.world.integrationParameters;
+            this.world = new RAPIER.World({
+                x: 0,
+                y: this.gravity,
+                z: 0
+            });
 
-        if (parameters) {
+            this.eventQueue = new RAPIER.EventQueue(true);
 
-            if ("numSolverIterations" in parameters) {
-                parameters.numSolverIterations = 12;
-            }
+            const parameters = this.world.integrationParameters;
 
-            if ("numInternalPgsIterations" in parameters) {
+            if (parameters) {
+                parameters.numSolverIterations = 16;
                 parameters.numInternalPgsIterations = 4;
             }
 
+            this.world.timestep = this.fixedTimeStep;
+
+            this.initialized = true;
+
+            return true;
+
+        })();
+
+        try {
+            return await this.initializing;
+        } finally {
+            this.initializing = null;
         }
-
-        this.eventQueue = new RAPIER.EventQueue(true);
-
-        this.initialized = true;
     }
 
-    // =====================================================
-    // DYNAMISCHE MÜNZE
-    // =====================================================
+    ensureInitialized() {
+
+        if (!this.initialized || !this.world) {
+            throw new Error(
+                "PhysicsSystem wurde noch nicht initialisiert. Zuerst await physics.init() aufrufen."
+            );
+        }
+    }
+
+    // --------------------------------------------------
+    // HILFSFUNKTIONEN
+    // --------------------------------------------------
+
+    createId() {
+        return this.nextId++;
+    }
+
+    vector(value = {}) {
+
+        return {
+            x: Number.isFinite(value.x) ? value.x : 0,
+            y: Number.isFinite(value.y) ? value.y : 0,
+            z: Number.isFinite(value.z) ? value.z : 0
+        };
+    }
+
+    validNumber(value, fallback) {
+        return Number.isFinite(value) ? value : fallback;
+    }
+
+    getActiveCount() {
+        return this.coins.size;
+    }
+
+    getCoinCount() {
+        return this.coins.size;
+    }
+
+    getTotalBodyCount() {
+        return this.bodies.size;
+    }
+
+    getStats() {
+
+        this.stats.activeBodies = this.coins.size;
+        this.stats.totalCoins = this.coins.size;
+        this.stats.pileColliders = this.coinPiles.size;
+
+        return { ...this.stats };
+    }
+
+    // --------------------------------------------------
+    // DYNAMISCHE MÜNZEN
+    // --------------------------------------------------
 
     createCoin(position, options = {}) {
 
         this.ensureInitialized();
 
-        if (this.bodies.size >= this.maxBodies) {
+        if (this.coins.size >= this.maxBodies) {
             return null;
         }
 
-        const id = this.nextId++;
+        const pos = this.vector(position);
 
-        const radius =
-            options.radius ??
-            this.defaultCoinOptions.radius;
+        const settings = {
+            ...this.defaultCoinOptions,
+            ...options
+        };
 
-        const thickness =
-            options.thickness ??
-            this.defaultCoinOptions.thickness;
-
-        const density =
-            options.density ??
-            this.defaultCoinOptions.density;
+        const radius = Math.max(0.01, settings.radius);
+        const thickness = Math.max(0.01, settings.thickness);
 
         const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(
-                position.x,
-                position.y,
-                position.z
-            )
+            .setTranslation(pos.x, pos.y, pos.z)
             .setLinearDamping(options.linearDamping ?? 0.35)
             .setAngularDamping(options.angularDamping ?? 0.65)
             .setCanSleep(true)
             .setCcdEnabled(true);
-
-        if (options.rotation) {
-            bodyDesc.setRotation(options.rotation);
-        }
 
         const body = this.world.createRigidBody(bodyDesc);
 
@@ -128,9 +178,10 @@ export class PhysicsSystem {
             thickness / 2,
             radius
         )
-            .setDensity(density)
-            .setFriction(options.friction ?? 0.95)
-            .setRestitution(options.restitution ?? 0.02);
+            .setDensity(settings.density)
+            .setFriction(settings.friction)
+            .setRestitution(settings.restitution)
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
 
         const collider = this.world.createCollider(
             colliderDesc,
@@ -138,171 +189,97 @@ export class PhysicsSystem {
         );
 
         const coin = {
-
-            id,
-
+            id: this.createId(),
             body,
             collider,
-
             active: true,
-
             savedState: null,
-
             radius,
             thickness,
-
-            options,
-
-            lastPlayerPush: -Infinity
-
+            options: settings,
+            lastPlayerPush: 0
         };
 
-        this.bodies.set(id, coin);
-        this.coins.set(id, coin);
+        this.coins.set(coin.id, coin);
+        this.bodies.set(coin.id, coin);
 
         return coin;
     }
 
-    // =====================================================
-    // MÜNZE MIT BEWEGUNG ERSTELLEN
-    // =====================================================
+    createFlowCoin(position, options = {}) {
 
-    createFlowCoin(position, direction = {}, options = {}) {
+        const coin = this.createCoin(position, {
+            ...options,
+            linearDamping: 0.08,
+            angularDamping: 0.15,
+            restitution: 0.04
+        });
 
-        const coin = this.createCoin(position, options);
-
-        if (!coin) return null;
-
-        const speed = options.speed ?? 2.5;
-
-        coin.body.setLinvel({
-
-            x: (direction.x ?? 0) * speed +
-                (Math.random() - 0.5) * 0.5,
-
-            y: (direction.y ?? 0) * speed +
-                Math.random() * 0.5,
-
-            z: (direction.z ?? 0) * speed +
-                (Math.random() - 0.5) * 0.5
-
-        }, true);
-
-        coin.body.setAngvel({
-
-            x: (Math.random() - 0.5) * 3,
-            y: (Math.random() - 0.5) * 3,
-            z: (Math.random() - 0.5) * 3
-
-        }, true);
+        if (coin) {
+            coin.body.wakeUp();
+        }
 
         return coin;
     }
 
-    // =====================================================
-    // MÜNZENSTAPEL-KOLLISION
-    // =====================================================
+    // --------------------------------------------------
+    // MÜNZENSTAPEL
+    // --------------------------------------------------
 
     /*
-        Erstellt eine statische Kollisionsfläche
-        für einen Münzstapel.
+       Erstellt nur eine Kollisionsfläche am oberen Ende
+       einer vertikalen Münzsäule.
 
-        position:
-            x und z = Position des Stapels
-            y = Höhe der untersten Münze
+       position.y = Mittelpunkt der untersten Münze.
+       count = Anzahl der Münzen in der Säule.
 
-        count:
-            Anzahl der Münzen im Stapel
-
-        Die Kollisionsfläche liegt auf Höhe
-        der obersten Münze.
-
-        Es wird nur eine Kollisionsfläche pro Stapel
-        benötigt, nicht eine pro Münze.
+       Keine dynamischen Körper für jede einzelne Münze!
     */
 
     createCoinPile(position, count, options = {}) {
 
         this.ensureInitialized();
 
-        const id = this.nextPileId++;
+        const pos = this.vector(position);
 
-        const radius =
-            options.radius ??
-            this.defaultCoinOptions.radius;
+        const radius = options.radius ?? 0.188;
+        const thickness = options.thickness ?? 0.1;
 
-        const thickness =
-            options.thickness ??
-            this.defaultCoinOptions.thickness;
-
-        const safeCount = Math.max(
-            0,
-            Math.floor(count)
-        );
+        count = Math.max(0, Math.floor(count));
 
         const pile = {
-
-            id,
-
-            position: {
-                x: position.x,
-                y: position.y,
-                z: position.z
-            },
-
-            count: safeCount,
-
+            id: this.createId(),
+            position: pos,
+            count,
             radius,
             thickness,
-
             body: null,
             collider: null,
-
-            options
-
+            enabled: true
         };
 
-        this.coinPiles.set(id, pile);
+        this.coinPiles.set(pile.id, pile);
 
-        this.updateCoinPile(pile, safeCount);
+        this.buildPileCollider(pile);
 
         return pile;
     }
 
-    // =====================================================
-    // MÜNZENSTAPEL AKTUALISIEREN
-    // =====================================================
+    buildPileCollider(pile) {
 
-    updateCoinPile(pile, count) {
-
-        this.ensureInitialized();
-
-        if (!pile) return false;
-
-        const safeCount = Math.max(
-            0,
-            Math.floor(count)
-        );
-
-        // Alten Körper entfernen.
         if (pile.body) {
-
             this.world.removeRigidBody(pile.body);
-
             pile.body = null;
             pile.collider = null;
         }
 
-        pile.count = safeCount;
-
-        // Leerer Stapel benötigt keine Hitbox.
-        if (safeCount <= 0) {
-            return true;
+        if (!pile.enabled || pile.count <= 0) {
+            return;
         }
 
         const topY =
             pile.position.y +
-            (safeCount - 1) * pile.thickness;
+            (pile.count - 1) * pile.thickness;
 
         const bodyDesc = RAPIER.RigidBodyDesc.fixed()
             .setTranslation(
@@ -311,140 +288,168 @@ export class PhysicsSystem {
                 pile.position.z
             );
 
-        const body = this.world.createRigidBody(bodyDesc);
-
-        /*
-            Die oberste Münze wird als flache
-            Kollisionsfläche dargestellt.
-        */
+        pile.body = this.world.createRigidBody(bodyDesc);
 
         const colliderDesc = RAPIER.ColliderDesc.cylinder(
             pile.thickness / 2,
             pile.radius
         )
-            .setFriction(pile.options.friction ?? 0.95)
-            .setRestitution(pile.options.restitution ?? 0.02);
+            .setFriction(0.95)
+            .setRestitution(0.01);
 
-        const collider = this.world.createCollider(
+        pile.collider = this.world.createCollider(
             colliderDesc,
-            body
+            pile.body
         );
+    }
 
-        pile.body = body;
-        pile.collider = collider;
+    updateCoinPile(pile, count) {
+
+        this.ensureInitialized();
+
+        if (!pile || !this.coinPiles.has(pile.id)) {
+            return false;
+        }
+
+        count = Math.max(0, Math.floor(count));
+
+        if (pile.count === count) {
+            return true;
+        }
+
+        pile.count = count;
+
+        this.buildPileCollider(pile);
 
         return true;
     }
 
-    // =====================================================
-    // MÜNZENSTAPEL ENTFERNEN
-    // =====================================================
+    setCoinPileEnabled(pile, enabled) {
+
+        this.ensureInitialized();
+
+        if (!pile || !this.coinPiles.has(pile.id)) {
+            return false;
+        }
+
+        pile.enabled = Boolean(enabled);
+
+        this.buildPileCollider(pile);
+
+        return true;
+    }
 
     removeCoinPile(pile) {
 
-        if (!pile) return;
+        this.ensureInitialized();
+
+        if (!pile || !this.coinPiles.has(pile.id)) {
+            return false;
+        }
 
         if (pile.body) {
-
             this.world.removeRigidBody(pile.body);
-
         }
 
         this.coinPiles.delete(pile.id);
 
         pile.body = null;
         pile.collider = null;
+
+        return true;
     }
 
-    // =====================================================
-    // MÜNZENSTAPEL AKTIVIEREN / DEAKTIVIEREN
-    // =====================================================
-
-    setCoinPileEnabled(pile, enabled) {
-
-        if (!pile) return;
-
-        if (enabled && !pile.body && pile.count > 0) {
-
-            this.updateCoinPile(pile, pile.count);
-
-        }
-
-        if (!enabled && pile.body) {
-
-            this.world.removeRigidBody(pile.body);
-
-            pile.body = null;
-            pile.collider = null;
-        }
-    }
-
-    // =====================================================
-    // FESTE BOX
-    // =====================================================
+    // --------------------------------------------------
+    // STATISCHE KOLLISIONEN
+    // --------------------------------------------------
 
     createStaticBox(position, size, options = {}) {
 
         this.ensureInitialized();
 
+        const pos = this.vector(position);
+        const dimensions = this.vector(size);
+
         const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-            .setTranslation(
-                position.x,
-                position.y,
-                position.z
-            );
+            .setTranslation(pos.x, pos.y, pos.z);
 
         const body = this.world.createRigidBody(bodyDesc);
 
         const colliderDesc = RAPIER.ColliderDesc.cuboid(
-            size.x / 2,
-            size.y / 2,
-            size.z / 2
+            Math.max(0.001, dimensions.x / 2),
+            Math.max(0.001, dimensions.y / 2),
+            Math.max(0.001, dimensions.z / 2)
         )
             .setFriction(options.friction ?? 0.9)
-            .setRestitution(options.restitution ?? 0.02);
+            .setRestitution(options.restitution ?? 0.01);
 
         const collider = this.world.createCollider(
             colliderDesc,
             body
         );
 
-        const entry = {
-            body,
-            collider
-        };
+        const entry = { body, collider };
 
-        this.staticBodies.push(entry);
+        this.staticBodies.add(entry);
 
         return entry;
     }
 
-    // =====================================================
-    // IMPULS AUF MÜNZE
-    // =====================================================
+    removeStaticBox(entry) {
 
-    pushCoin(coin, impulse) {
+        this.ensureInitialized();
 
-        if (!coin?.active || !coin.body) return;
+        if (!entry || !this.staticBodies.has(entry)) {
+            return false;
+        }
 
-        coin.body.applyImpulse({
+        this.world.removeRigidBody(entry.body);
+        this.staticBodies.delete(entry);
 
-            x: impulse.x ?? 0,
-            y: impulse.y ?? 0,
-            z: impulse.z ?? 0
-
-        }, true);
+        return true;
     }
 
-    // =====================================================
-    // BEREICHSDRUCK
-    // =====================================================
+    // --------------------------------------------------
+    // IMPULSE UND BEWEGUNG
+    // --------------------------------------------------
 
-    pushArea(center, radius, strength, direction = {}) {
+    pushCoin(coin, impulse, point = null) {
 
-        for (const coin of this.bodies.values()) {
+        if (!coin || !coin.active || !coin.body) {
+            return false;
+        }
 
-            if (!coin.body) continue;
+        const force = this.vector(impulse);
+
+        coin.body.applyImpulse(force, true);
+
+        if (point) {
+            coin.body.applyImpulseAtPoint(
+                force,
+                this.vector(point),
+                true
+            );
+        }
+
+        coin.body.wakeUp();
+
+        return true;
+    }
+
+    pushArea(position, radius, strength, direction = null) {
+
+        this.ensureInitialized();
+
+        const center = this.vector(position);
+
+        const maxDistance = Math.max(0.01, radius);
+        const force = this.validNumber(strength, 0);
+
+        let affected = 0;
+
+        for (const coin of this.coins.values()) {
+
+            if (!coin.active || !coin.body) continue;
 
             const p = coin.body.translation();
 
@@ -456,246 +461,171 @@ export class PhysicsSystem {
                 dx * dx + dy * dy + dz * dz
             );
 
-            if (distance >= radius || distance < 0.001) {
-                continue;
+            if (distance >= maxDistance) continue;
+
+            let nx, ny, nz;
+
+            if (direction) {
+
+                const dir = this.vector(direction);
+                const length = Math.sqrt(
+                    dir.x * dir.x +
+                    dir.y * dir.y +
+                    dir.z * dir.z
+                ) || 1;
+
+                nx = dir.x / length;
+                ny = dir.y / length;
+                nz = dir.z / length;
+
+            } else {
+
+                const length = distance || 1;
+
+                nx = dx / length;
+                ny = dy / length;
+                nz = dz / length;
             }
 
-            const falloff = 1 - distance / radius;
+            const falloff = 1 - distance / maxDistance;
+            const impulse = force * falloff;
 
-            let nx = direction.x ?? dx / distance;
-            let ny = direction.y ?? dy / distance;
-            let nz = direction.z ?? dz / distance;
+            coin.body.applyImpulse(
+                {
+                    x: nx * impulse,
+                    y: ny * impulse,
+                    z: nz * impulse
+                },
+                true
+            );
 
-            const length = Math.sqrt(
-                nx * nx + ny * ny + nz * nz
-            ) || 1;
+            coin.body.wakeUp();
 
-            nx /= length;
-            ny /= length;
-            nz /= length;
-
-            const force = strength * falloff;
-
-            coin.body.applyImpulse({
-
-                x: nx * force,
-                y: ny * force + force * 0.12,
-                z: nz * force
-
-            }, true);
+            affected++;
         }
+
+        return affected;
     }
 
-    // =====================================================
-    // SPIELER STÖSST MÜNZEN AN
-    // =====================================================
+    pushCoinsNearPlayer(position, radius = 2, strength = 2) {
 
-    pushCoinsNearPlayer(position, velocity, radius = 1.25) {
-
-        const horizontalSpeed = Math.sqrt(
-            velocity.x * velocity.x +
-            velocity.z * velocity.z
+        return this.pushArea(
+            position,
+            radius,
+            strength
         );
-
-        if (horizontalSpeed < 0.15) return;
-
-        const moveX = velocity.x / horizontalSpeed;
-        const moveZ = velocity.z / horizontalSpeed;
-
-        const strength = Math.min(
-            horizontalSpeed * 2.5,
-            7
-        );
-
-        for (const coin of this.bodies.values()) {
-
-            if (!coin.body) continue;
-
-            const p = coin.body.translation();
-
-            const dx = p.x - position.x;
-            const dy = p.y - position.y;
-            const dz = p.z - position.z;
-
-            const distance = Math.sqrt(dx * dx + dz * dz);
-
-            if (distance > radius) continue;
-            if (Math.abs(dy) > 1.1) continue;
-
-            if (this.elapsed - coin.lastPlayerPush < 0.15) {
-                continue;
-            }
-
-            const safeDistance = Math.max(distance, 0.05);
-
-            const falloff = 1 - distance / radius;
-
-            const awayX = dx / safeDistance;
-            const awayZ = dz / safeDistance;
-
-            const force = strength * falloff;
-
-            coin.body.applyImpulse({
-
-                x: (moveX * 0.55 + awayX * 0.45) * force,
-                y: force * 0.08,
-                z: (moveZ * 0.55 + awayZ * 0.45) * force
-
-            }, true);
-
-            coin.lastPlayerPush = this.elapsed;
-        }
     }
 
-    // =====================================================
+    // --------------------------------------------------
     // FÖRDERBAND
-    // =====================================================
+    // --------------------------------------------------
 
-    applyConveyor(position, size, velocity, strength = 0.08) {
+    applyConveyor(position, size, velocity, strength = 0.2) {
 
-        const minX = position.x - size.x / 2;
-        const maxX = position.x + size.x / 2;
+        this.ensureInitialized();
 
-        const minY = position.y - size.y / 2;
-        const maxY = position.y + size.y / 2;
-
-        const minZ = position.z - size.z / 2;
-        const maxZ = position.z + size.z / 2;
+        const center = this.vector(position);
+        const half = this.vector(size);
+        const target = this.vector(velocity);
 
         const amount = Math.max(
             0,
-            Math.min(strength, 1)
+            Math.min(1, strength)
         );
 
-        for (const coin of this.bodies.values()) {
+        let affected = 0;
 
-            if (!coin.body) continue;
+        for (const coin of this.coins.values()) {
+
+            if (!coin.active || !coin.body) continue;
 
             const p = coin.body.translation();
 
-            if (
-                p.x < minX || p.x > maxX ||
-                p.y < minY || p.y > maxY ||
-                p.z < minZ || p.z > maxZ
-            ) {
-                continue;
-            }
+            const inside =
+                Math.abs(p.x - center.x) <= half.x / 2 &&
+                Math.abs(p.y - center.y) <= half.y / 2 &&
+                Math.abs(p.z - center.z) <= half.z / 2;
+
+            if (!inside) continue;
 
             const current = coin.body.linvel();
 
-            coin.body.setLinvel({
+            coin.body.setLinvel(
+                {
+                    x: current.x + (target.x - current.x) * amount,
+                    y: current.y + (target.y - current.y) * amount,
+                    z: current.z + (target.z - current.z) * amount
+                },
+                true
+            );
 
-                x: current.x +
-                    (velocity.x - current.x) * amount,
+            coin.body.wakeUp();
 
-                y: current.y,
-
-                z: current.z +
-                    (velocity.z - current.z) * amount
-
-            }, true);
+            affected++;
         }
+
+        return affected;
     }
 
-    // =====================================================
-    // ZUSTAND SPEICHERN
-    // =====================================================
+    // --------------------------------------------------
+    // MÜNZEN EINFIEREN UND AKTIVIEREN
+    // --------------------------------------------------
 
     saveState(coin) {
 
-        if (!coin?.body) return;
+        if (!coin || !coin.body) return null;
 
-        const p = coin.body.translation();
-        const r = coin.body.rotation();
-
-        const v = coin.body.linvel();
-        const a = coin.body.angvel();
-
-        coin.savedState = {
-
-            position: {
-                x: p.x,
-                y: p.y,
-                z: p.z
-            },
-
-            rotation: {
-                x: r.x,
-                y: r.y,
-                z: r.z,
-                w: r.w
-            },
-
-            velocity: {
-                x: v.x,
-                y: v.y,
-                z: v.z
-            },
-
-            angularVelocity: {
-                x: a.x,
-                y: a.y,
-                z: a.z
-            }
+        return {
+            translation: { ...coin.body.translation() },
+            rotation: { ...coin.body.rotation() },
+            linvel: { ...coin.body.linvel() },
+            angvel: { ...coin.body.angvel() }
         };
     }
 
-    // =====================================================
-    // MÜNZE EINFRIEREN
-    // =====================================================
-
     freezeCoin(coin) {
 
-        if (!coin?.active || !coin.body) return;
+        this.ensureInitialized();
 
-        this.saveState(coin);
+        if (!coin || !coin.active) return false;
+
+        coin.savedState = this.saveState(coin);
 
         this.world.removeRigidBody(coin.body);
-
-        this.bodies.delete(coin.id);
 
         coin.body = null;
         coin.collider = null;
         coin.active = false;
+
+        this.coins.delete(coin.id);
+
+        return true;
     }
 
-    // =====================================================
-    // MÜNZE WIEDER AKTIVIEREN
-    // =====================================================
-
-    resumeCoin(coin) {
+    resumeCoin(coin, position = null) {
 
         this.ensureInitialized();
 
-        if (!coin || coin.active || !coin.savedState) {
-            return false;
-        }
+        if (!coin || coin.active) return false;
 
-        if (this.bodies.size >= this.maxBodies) {
+        if (this.coins.size >= this.maxBodies) {
             return false;
         }
 
         const state = coin.savedState;
 
+        if (!state && !position) {
+            return false;
+        }
+
+        const pos = position
+            ? this.vector(position)
+            : state.translation;
+
         const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(
-                state.position.x,
-                state.position.y,
-                state.position.z
-            )
-            .setRotation(state.rotation)
-            .setLinvel(
-                state.velocity.x,
-                state.velocity.y,
-                state.velocity.z
-            )
-            .setAngvel(
-                state.angularVelocity.x,
-                state.angularVelocity.y,
-                state.angularVelocity.z
-            )
-            .setLinearDamping(coin.options.linearDamping ?? 0.35)
-            .setAngularDamping(coin.options.angularDamping ?? 0.65)
+            .setTranslation(pos.x, pos.y, pos.z)
+            .setLinearDamping(0.35)
+            .setAngularDamping(0.65)
             .setCanSleep(true)
             .setCcdEnabled(true);
 
@@ -705,49 +635,104 @@ export class PhysicsSystem {
             coin.thickness / 2,
             coin.radius
         )
-            .setDensity(coin.options.density ?? 2.5)
-            .setFriction(coin.options.friction ?? 0.95)
-            .setRestitution(coin.options.restitution ?? 0.02);
+            .setDensity(coin.options.density)
+            .setFriction(coin.options.friction)
+            .setRestitution(coin.options.restitution);
 
         const collider = this.world.createCollider(
             colliderDesc,
             body
         );
 
+        if (state && !position) {
+
+            body.setRotation(state.rotation, true);
+            body.setLinvel(state.linvel, true);
+            body.setAngvel(state.angvel, true);
+        }
+
         coin.body = body;
         coin.collider = collider;
         coin.active = true;
 
-        this.bodies.set(coin.id, coin);
+        this.coins.set(coin.id, coin);
+
+        body.wakeUp();
 
         return true;
     }
 
-    // =====================================================
-    // MEHRERE MÜNZEN EINFRIEREN
-    // =====================================================
-
     freezeMany(coins) {
 
+        let count = 0;
+
         for (const coin of coins) {
-            this.freezeCoin(coin);
+            if (this.freezeCoin(coin)) {
+                count++;
+            }
         }
+
+        return count;
     }
 
-    // =====================================================
-    // PHYSIK UPDATE
-    // =====================================================
+    // --------------------------------------------------
+    // TRANSFORM
+    // --------------------------------------------------
+
+    getTransform(coin) {
+
+        if (!coin || !coin.active || !coin.body) {
+            return null;
+        }
+
+        return {
+            position: { ...coin.body.translation() },
+            rotation: { ...coin.body.rotation() }
+        };
+    }
+
+    // --------------------------------------------------
+    // MÜNZE ENTFERNEN
+    // --------------------------------------------------
+
+    removeCoin(coin) {
+
+        this.ensureInitialized();
+
+        if (!coin) return false;
+
+        if (coin.active && coin.body) {
+            this.world.removeRigidBody(coin.body);
+        }
+
+        this.coins.delete(coin.id);
+        this.bodies.delete(coin.id);
+
+        coin.body = null;
+        coin.collider = null;
+        coin.active = false;
+        coin.savedState = null;
+
+        return true;
+    }
+
+    // --------------------------------------------------
+    // PHYSIK-UPDATE
+    // --------------------------------------------------
 
     update(deltaTime) {
 
-        if (!this.initialized) return;
+        if (!this.initialized || !this.world) return;
 
-        const dt = Math.min(
-            Math.max(deltaTime, 0),
-            0.1
-        );
+        let dt = Number.isFinite(deltaTime)
+            ? Math.max(0, deltaTime)
+            : 0;
 
-        this.elapsed += dt;
+        if (dt > this.maxFrameTime) {
+            this.stats.droppedTime += dt - this.maxFrameTime;
+            dt = this.maxFrameTime;
+        }
+
         this.accumulator += dt;
 
         let steps = 0;
@@ -757,128 +742,61 @@ export class PhysicsSystem {
             steps < this.maxSubSteps
         ) {
 
+            this.world.timestep = this.fixedTimeStep;
+
             this.world.step(this.eventQueue);
 
             this.accumulator -= this.fixedTimeStep;
 
             steps++;
+            this.stats.steps++;
         }
 
-        if (steps >= this.maxSubSteps) {
+        if (
+            steps >= this.maxSubSteps &&
+            this.accumulator >= this.fixedTimeStep
+        ) {
+
+            this.stats.droppedTime += this.accumulator;
             this.accumulator = 0;
         }
+
+        this.elapsed += dt;
     }
 
-    // =====================================================
-    // TRANSFORM ABFRAGEN
-    // =====================================================
-
-    getTransform(coin) {
-
-        if (!coin?.body || !coin.active) {
-
-            return coin?.savedState
-                ? {
-                    position: coin.savedState.position,
-                    rotation: coin.savedState.rotation
-                }
-                : null;
-        }
-
-        const p = coin.body.translation();
-        const r = coin.body.rotation();
-
-        return {
-
-            position: {
-                x: p.x,
-                y: p.y,
-                z: p.z
-            },
-
-            rotation: {
-                x: r.x,
-                y: r.y,
-                z: r.z,
-                w: r.w
-            }
-        };
-    }
-
-    // =====================================================
-    // MÜNZE ENTFERNEN
-    // =====================================================
-
-    removeCoin(coin) {
-
-        if (!coin) return;
-
-        if (coin.body) {
-            this.world.removeRigidBody(coin.body);
-        }
-
-        this.bodies.delete(coin.id);
-        this.coins.delete(coin.id);
-
-        coin.body = null;
-        coin.collider = null;
-        coin.active = false;
-    }
-
-    // =====================================================
-    // ANZAHLEN
-    // =====================================================
-
-    getActiveCount() {
-        return this.bodies.size;
-    }
-
-    getCoinCount() {
-        return this.coins.size;
-    }
-
-    getCoinPileCount() {
-        return this.coinPiles.size;
-    }
-
-    // =====================================================
-    // INITIALISIERUNG PRÜFEN
-    // =====================================================
-
-    ensureInitialized() {
-
-        if (!this.initialized) {
-
-            throw new Error(
-                "PhysicsSystem ist nicht initialisiert. " +
-                "Bitte zuerst await physics.init() aufrufen."
-            );
-        }
-    }
-
-    // =====================================================
+    // --------------------------------------------------
     // AUFRÄUMEN
-    // =====================================================
+    // --------------------------------------------------
 
     destroy() {
 
-        if (!this.initialized) return;
+        if (!this.world) return;
+
+        for (const pile of this.coinPiles.values()) {
+            pile.body = null;
+            pile.collider = null;
+        }
+
+        for (const coin of this.bodies.values()) {
+            coin.body = null;
+            coin.collider = null;
+            coin.active = false;
+        }
+
+        this.coins.clear();
+        this.bodies.clear();
+        this.coinPiles.clear();
+        this.staticBodies.clear();
+
+        if (this.eventQueue) {
+            this.eventQueue.free();
+            this.eventQueue = null;
+        }
 
         this.world.free();
-
-        this.eventQueue?.free();
-
-        this.bodies.clear();
-        this.coins.clear();
-        this.coinPiles.clear();
-
-        this.staticBodies = [];
-
         this.world = null;
-        this.eventQueue = null;
 
         this.initialized = false;
-
         this.accumulator = 0;
         this.elapsed = 0;
     }

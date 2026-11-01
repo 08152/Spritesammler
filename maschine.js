@@ -4,12 +4,8 @@ import { createCoin } from "./coin.js";
 
 export class CoinCountingMachine {
     constructor(scene, physics, options = {}) {
-        if (!physics) {
-            throw new Error("CoinCountingMachine benötigt PhysicsSystem aus physik.js.");
-        }
-
         this.scene = scene;
-        this.physics = physics;
+        this.physics = physics ?? null;
 
         this.position = options.position ?? {
             x: -8,
@@ -32,14 +28,15 @@ export class CoinCountingMachine {
         this.speed = 0;
 
         this.running = true;
-        this.coinsPerSecond = 25;
+        this.coinsPerSecond = 0;
 
         this.elapsed = 0;
         this.spawnTimer = 0;
         this.displayTimer = 0;
 
-        this.spawnInterval = options.spawnInterval ?? 0.13;
-        this.maxQueuedCoins = options.maxQueuedCoins ?? 500;
+        this.spawnInterval = options.spawnInterval ?? 0.08;
+        this.maxQueuedCoins = options.maxQueuedCoins ?? 5000;
+        this.maxActiveCoins = options.maxActiveCoins ?? 300;
 
         this.coinQueue = [];
         this.activeCoins = [];
@@ -56,9 +53,7 @@ export class CoinCountingMachine {
         this.scene.add(this.group);
     }
 
-    // --------------------------------------------------
     // MATERIALIEN
-    // --------------------------------------------------
 
     createMaterials() {
         this.materials = {
@@ -128,9 +123,7 @@ export class CoinCountingMachine {
         };
     }
 
-    // --------------------------------------------------
     // HILFSFUNKTIONEN
-    // --------------------------------------------------
 
     addBox(name, size, position, material, parent = this.group) {
         const mesh = new THREE.Mesh(
@@ -170,9 +163,7 @@ export class CoinCountingMachine {
         };
     }
 
-    // --------------------------------------------------
     // MASCHINE
-    // --------------------------------------------------
 
     createMachine() {
         this.createBase();
@@ -263,9 +254,7 @@ export class CoinCountingMachine {
         }
     }
 
-    // --------------------------------------------------
     // EINFÜLLTRICHTER
-    // --------------------------------------------------
 
     createHopper() {
         const hopper = new THREE.Group();
@@ -309,14 +298,10 @@ export class CoinCountingMachine {
         this.hopper = hopper;
     }
 
-    // --------------------------------------------------
     // FÖRDERBAND
-    // --------------------------------------------------
 
     createConveyor() {
         const conveyor = new THREE.Group();
-
-        // KORREKTUR: Förderband liegt jetzt auf der Münz-Z-Achse.
         conveyor.position.set(0.25, 1.75, 0);
 
         this.belt = this.addBox(
@@ -382,13 +367,10 @@ export class CoinCountingMachine {
         this.group.add(conveyor);
     }
 
-    // --------------------------------------------------
     // ZÄHLMECHANISMUS
-    // --------------------------------------------------
 
     createCountingMechanism() {
         const mechanism = new THREE.Group();
-
         mechanism.position.set(0.4, 1.95, -0.45);
 
         const cover = new THREE.Mesh(
@@ -441,9 +423,7 @@ export class CoinCountingMachine {
         this.group.add(mechanism);
     }
 
-    // --------------------------------------------------
     // AUSGABE
-    // --------------------------------------------------
 
     createOutput() {
         this.addBox(
@@ -470,9 +450,7 @@ export class CoinCountingMachine {
         );
     }
 
-    // --------------------------------------------------
     // BEDIENKNÖPFE
-    // --------------------------------------------------
 
     createButtons() {
         const buttons = [
@@ -529,9 +507,7 @@ export class CoinCountingMachine {
         });
     }
 
-    // --------------------------------------------------
     // DISPLAY
-    // --------------------------------------------------
 
     createScreenFrame() {
         this.addBox(
@@ -657,12 +633,13 @@ export class CoinCountingMachine {
         this.displayTexture.needsUpdate = true;
     }
 
-    // --------------------------------------------------
-    // PHYSIK-KOLLISIONEN
-    // --------------------------------------------------
+    // STATISCHE KOLLISIONEN
+    // Diese sind nur für die Maschinenumgebung.
+    // Die Münzen selbst verwenden keine Physik.
 
     createPhysicsColliders() {
-        // Boden unter dem Förderband.
+        if (!this.physics?.createStaticBox) return;
+
         const platform = this.physics.createStaticBox(
             this.worldPoint(0.4, 1.65, 0),
             {
@@ -673,9 +650,8 @@ export class CoinCountingMachine {
             { friction: 0.9 }
         );
 
-        this.staticColliders.push(platform);
+        if (platform) this.staticColliders.push(platform);
 
-        // Seitliche Begrenzungen.
         for (const z of [-0.48, 0.48]) {
             const rail = this.physics.createStaticBox(
                 this.worldPoint(0.4, 1.85, z),
@@ -687,10 +663,9 @@ export class CoinCountingMachine {
                 { friction: 0.8 }
             );
 
-            this.staticColliders.push(rail);
+            if (rail) this.staticColliders.push(rail);
         }
 
-        // Auffangfläche unter dem Trichter.
         const catcher = this.physics.createStaticBox(
             this.worldPoint(-0.55, 1.65, 0),
             {
@@ -701,22 +676,26 @@ export class CoinCountingMachine {
             { friction: 0.9 }
         );
 
-        this.staticColliders.push(catcher);
+        if (catcher) this.staticColliders.push(catcher);
     }
 
-    // --------------------------------------------------
     // MÜNZEN EINWERFEN
-    // --------------------------------------------------
 
     insertCoins(amount = 1, options = {}) {
         amount = Math.max(0, Math.floor(amount));
 
-        const available = this.maxQueuedCoins - this.coinQueue.length;
+        const available = Math.max(
+            0,
+            this.maxQueuedCoins - this.coinQueue.length
+        );
+
         const accepted = Math.min(amount, available);
+
+        const value = Number(options.valuePerCoin ?? 1);
 
         for (let i = 0; i < accepted; i++) {
             this.coinQueue.push({
-                value: options.valuePerCoin ?? 1
+                value: Number.isFinite(value) ? value : 1
             });
         }
 
@@ -729,162 +708,158 @@ export class CoinCountingMachine {
         });
     }
 
+    // Eine Münze erscheint an einer beliebigen Stelle auf dem Band.
+    // Ihre Landeposition ist für das Zählen nicht entscheidend.
+
     spawnCoin() {
-        if (this.activeCoins.length >= 300) return false;
+        if (this.activeCoins.length >= this.maxActiveCoins) {
+            return false;
+        }
 
-        const coinPosition = this.worldPoint(
-            -0.75 + (Math.random() - 0.5) * 0.28,
-            3.05 + Math.random() * 0.3,
-            (Math.random() - 0.5) * 0.3
+        const startX = THREE.MathUtils.randFloat(-0.45, 1.05);
+        const startZ = THREE.MathUtils.randFloat(-0.29, 0.29);
+
+        const start = this.worldPoint(
+            startX,
+            1.84,
+            startZ
         );
 
-        const physicsCoin = this.physics.createCoin(
-            coinPosition,
-            {
-                radius: 0.18 * this.scale,
-                thickness: 0.035 * this.scale,
-                density: 2.5,
-                friction: 0.85,
-                restitution: 0.16
-            }
-        );
-
-        if (!physicsCoin) return false;
-
-        const visual = createCoin(
-            coinPosition,
-            { scale: this.scale }
-        );
+        const visual = createCoin(start, {});
+        if (!visual) return false;
 
         visual.scale.setScalar(this.scale);
+
+        // Münze liegt flach auf dem Förderband.
+        visual.rotation.x = -Math.PI / 2;
 
         this.scene.add(visual);
 
         const queuedCoin = this.coinQueue.shift();
 
         this.activeCoins.push({
-            physicsCoin,
             visual,
             value: queuedCoin?.value ?? 1,
+
+            startX,
+            startZ,
+
+            progress: 0,
+
+            // Jede Münze hat eine eigene Transportdauer.
+            duration: THREE.MathUtils.randFloat(0.75, 1.35),
+
+            rotation: Math.random() * Math.PI * 2,
             counted: false
         });
 
         return true;
     }
 
-    // --------------------------------------------------
     // MÜNZEN BEWEGEN UND ZÄHLEN
-    // --------------------------------------------------
 
     updateCoins(deltaTime) {
-        // Neue Münzen nach und nach einwerfen.
-        this.spawnTimer += deltaTime;
-
-        while (
-            this.coinQueue.length > 0 &&
-            this.spawnTimer >= this.spawnInterval
-        ) {
-            const success = this.spawnCoin();
-
-            if (!success) break;
-
-            this.spawnTimer -= this.spawnInterval;
-        }
-
-        // Förderband-Mittelpunkt.
-        const conveyorPosition = this.worldPoint(
-            0.4,
-            1.88,
-            0
-        );
-
-        // Münzen auf dem Band in Richtung Ausgabe schieben.
         if (this.running) {
-            this.physics.applyConveyor(
-                conveyorPosition,
-                {
-                    x: 2.5 * this.scale,
-                    y: 0.7 * this.scale,
-                    z: 0.9 * this.scale
-                },
-                {
-                    x: 3.5 * this.scale,
-                    y: 0,
-                    z: 0
-                },
-                0.18
-            );
+            this.spawnTimer += deltaTime;
+
+            while (
+                this.coinQueue.length > 0 &&
+                this.spawnTimer >= this.spawnInterval &&
+                this.activeCoins.length < this.maxActiveCoins
+            ) {
+                if (!this.spawnCoin()) break;
+
+                this.spawnTimer -= this.spawnInterval;
+            }
         }
+
+        let countedThisFrame = 0;
 
         for (let i = this.activeCoins.length - 1; i >= 0; i--) {
             const item = this.activeCoins[i];
 
-            const transform = this.physics.getTransform(
-                item.physicsCoin
-            );
+            if (this.running && !item.counted) {
+                item.progress += deltaTime / item.duration;
 
-            if (!transform) {
-                this.removeCoinAt(i);
-                continue;
-            }
+                const t = THREE.MathUtils.clamp(
+                    item.progress,
+                    0,
+                    1
+                );
 
-            const p = transform.position;
-            const r = transform.rotation;
+                // Sanfte Beschleunigung.
+                const eased = t * t * (3 - 2 * t);
 
-            // Visuelle Position aktualisieren.
-            item.visual.position.set(p.x, p.y, p.z);
+                // Bewegung über das Förderband.
+                const x = THREE.MathUtils.lerp(
+                    item.startX,
+                    1.35,
+                    eased
+                );
 
-            // Rapier-Rotation übernehmen.
-            const rapierQuaternion = new THREE.Quaternion(
-                r.x,
-                r.y,
-                r.z,
-                r.w
-            );
+                const z = THREE.MathUtils.lerp(
+                    item.startZ,
+                    -0.12,
+                    eased
+                );
 
-            const correction = new THREE.Quaternion().setFromAxisAngle(
-                new THREE.Vector3(1, 0, 0),
-                -Math.PI / 2
-            );
+                // Leichte Bewegung der Münze.
+                const bounce = Math.sin(t * Math.PI * 5) * 0.012;
 
-            item.visual.quaternion.copy(
-                rapierQuaternion.multiply(correction)
-            );
+                const p = this.worldPoint(
+                    x,
+                    1.84 + bounce,
+                    z
+                );
 
-            // Zählbereich.
-            const countingX = this.worldPoint(1.05, 0, 0).x;
-            const centerZ = this.worldPoint(0, 0, 0).z;
-            const baseY = this.worldPoint(0, 0, 0).y;
+                item.visual.position.set(p.x, p.y, p.z);
 
-            const insideCountingZone =
-                p.x >= countingX &&
-                Math.abs(p.z - centerZ) < 0.48 * this.scale &&
-                p.y >= baseY + 1.35 * this.scale &&
-                p.y <= baseY + 2.6 * this.scale;
+                item.rotation += deltaTime * 4;
 
-            if (
-                this.running &&
-                !item.counted &&
-                insideCountingZone
-            ) {
-                item.counted = true;
+                item.visual.rotation.set(
+                    -Math.PI / 2,
+                    0,
+                    item.rotation
+                );
 
-                this.count++;
-                this.totalValue += item.value;
+                // Zählung erfolgt über den Ablauf,
+                // nicht über eine exakte Kollisionsposition.
+                if (item.progress >= 1) {
+                    item.counted = true;
 
-                this.removeCoinAt(i);
-                continue;
-            }
+                    this.count++;
+                    this.totalValue += item.value;
 
-            // Münzen außerhalb der Maschine entfernen.
-            if (
-                p.y < this.position.y - 3 ||
-                Math.abs(p.x - this.position.x) > 20 ||
-                Math.abs(p.z - this.position.z) > 20
-            ) {
-                this.removeCoinAt(i);
+                    countedThisFrame++;
+
+                    this.scene.remove(item.visual);
+                    this.disposeCoinVisual(item.visual);
+
+                    this.activeCoins.splice(i, 1);
+                }
             }
         }
+
+        if (countedThisFrame > 0) {
+            this.coinsPerSecond = countedThisFrame / Math.max(deltaTime, 0.001);
+        } else {
+            this.coinsPerSecond *= 0.9;
+        }
+
+        this.speed = Math.max(0, this.coinsPerSecond);
+    }
+
+    disposeCoinVisual(visual) {
+        if (!visual) return;
+
+        visual.traverse(object => {
+            if (object.geometry) {
+                object.geometry.dispose();
+            }
+
+            // Materialien nicht zerstören, wenn sie geteilt werden.
+            // Die Münzmaterialien werden von coin.js verwaltet.
+        });
     }
 
     removeCoinAt(index) {
@@ -892,15 +867,12 @@ export class CoinCountingMachine {
         if (!item) return;
 
         this.scene.remove(item.visual);
-
-        this.physics.removeCoin(item.physicsCoin);
+        this.disposeCoinVisual(item.visual);
 
         this.activeCoins.splice(index, 1);
     }
 
-    // --------------------------------------------------
     // STEUERUNG
-    // --------------------------------------------------
 
     start() {
         this.running = true;
@@ -923,6 +895,8 @@ export class CoinCountingMachine {
     reset() {
         this.count = 0;
         this.totalValue = 0;
+        this.coinsPerSecond = 0;
+        this.speed = 0;
 
         this.drawDisplay();
     }
@@ -957,24 +931,17 @@ export class CoinCountingMachine {
         this.group.position.set(x, y, z);
     }
 
-    // --------------------------------------------------
     // UPDATE
-    // --------------------------------------------------
 
     update(deltaTime) {
-        const dt = Math.min(deltaTime, 0.05);
+        const dt = Math.min(Math.max(deltaTime, 0), 0.05);
 
         this.elapsed += dt;
 
         if (this.running) {
             for (const part of this.movingParts) {
-                part.mesh.rotation[part.axis] +=
-                    part.speed * dt;
+                part.mesh.rotation[part.axis] += part.speed * dt;
             }
-
-            this.speed = this.coinsPerSecond;
-        } else {
-            this.speed = 0;
         }
 
         this.updateCoins(dt);
@@ -993,29 +960,35 @@ export class CoinCountingMachine {
         }
     }
 
-    // --------------------------------------------------
     // AUFRÄUMEN
-    // --------------------------------------------------
 
     dispose() {
         for (let i = this.activeCoins.length - 1; i >= 0; i--) {
             this.removeCoinAt(i);
         }
 
-        // Statische Kollisionskörper entfernen.
         for (const collider of this.staticColliders) {
+            if (this.physics?.removeStaticBox) {
+                this.physics.removeStaticBox(collider);
+                continue;
+            }
+
             const body = collider?.body ?? collider?.rigidBody;
 
-            if (body && this.physics.world) {
+            if (body && this.physics?.world) {
                 try {
                     this.physics.world.removeRigidBody(body);
                 } catch (error) {
-                    console.warn("Collider konnte nicht entfernt werden:", error);
+                    console.warn(
+                        "Collider konnte nicht entfernt werden:",
+                        error
+                    );
                 }
             }
         }
 
         this.staticColliders = [];
+        this.coinQueue = [];
 
         this.scene.remove(this.group);
 
@@ -1033,9 +1006,7 @@ export class CoinCountingMachine {
     }
 }
 
-// --------------------------------------------------
 // EXPORT
-// --------------------------------------------------
 
 export function createCoinCountingMachine(scene, physics, options = {}) {
     return new CoinCountingMachine(scene, physics, options);

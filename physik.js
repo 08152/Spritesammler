@@ -1,217 +1,175 @@
-import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.17.3/rapier.es.js";
+
+import * as RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.17.3/rapier.es.js";
 
 export class PhysicsSystem {
-
     constructor(options = {}) {
-        this.maxBodies = options.maxBodies ?? 300;
+        this.maxBodies = options.maxBodies ?? 350;
         this.fixedTimeStep = 1 / 60;
+        this.accumulator = 0;
+        this.elapsed = 0;
 
         this.world = null;
+        this.eventQueue = null;
+        this.initialized = false;
+
+        // Nur aktive Münzen befinden sich in dieser Map.
         this.bodies = new Map();
+
+        // Alle bekannten Münzen bleiben hier registriert.
+        this.coins = new Map();
+
+        this.staticBodies = [];
         this.nextId = 1;
 
-        this.accumulator = 0;
-        this.ready = false;
-
-        this.gravity = {
-            x: 0,
-            y: -9.81,
-            z: 0
-        };
+        this.gravity = options.gravity ?? -9.81;
     }
 
-    // =========================================
-    // INITIALISIERUNG
-    // =========================================
-
     async init() {
+        if (this.initialized) return;
+
         await RAPIER.init();
 
-        this.world = new RAPIER.World(this.gravity);
+        this.world = new RAPIER.World({
+            x: 0,
+            y: this.gravity,
+            z: 0
+        });
 
         this.world.timestep = this.fixedTimeStep;
 
-        const params = this.world.integrationParameters;
+        if (this.world.integrationParameters) {
+            const parameters = this.world.integrationParameters;
 
-        if (params) {
-            params.numSolverIterations = 12;
-            params.numInternalPgsIterations = 4;
-            params.dt = this.fixedTimeStep;
+            if ("numSolverIterations" in parameters) {
+                parameters.numSolverIterations = 8;
+            }
+
+            if ("numInternalPgsIterations" in parameters) {
+                parameters.numInternalPgsIterations = 2;
+            }
         }
 
-        this.ready = true;
-
-        return this;
+        this.eventQueue = new RAPIER.EventQueue(true);
+        this.initialized = true;
     }
 
-    // =========================================
-    // MÜNZE ERSTELLEN
-    // =========================================
-
     createCoin(position, options = {}) {
-
-        if (!this.ready) {
-            throw new Error("PhysicsSystem wurde noch nicht initialisiert.");
-        }
+        this.ensureInitialized();
 
         if (this.bodies.size >= this.maxBodies) {
             return null;
         }
 
-        const radius = options.radius ?? 0.188;
-        const thickness = options.thickness ?? 0.1;
+        const id = this.nextId++;
+
+        const radius = options.radius ?? 0.18;
+        const thickness = options.thickness ?? 0.035;
+        const density = options.density ?? 2.5;
 
         const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(
-                position.x,
-                position.y,
-                position.z
-            )
-            .setLinearDamping(options.linearDamping ?? 0.08)
-            .setAngularDamping(options.angularDamping ?? 0.12)
-            .setCanSleep(true)
+            .setTranslation(position.x, position.y, position.z)
+            .setLinearDamping(options.linearDamping ?? 0.12)
+            .setAngularDamping(options.angularDamping ?? 0.18)
             .setCcdEnabled(true);
 
         const body = this.world.createRigidBody(bodyDesc);
 
-        const collider = RAPIER.ColliderDesc.cylinder(
+        const colliderDesc = RAPIER.ColliderDesc.cylinder(
             thickness / 2,
             radius
         )
-            .setDensity(options.density ?? 7)
-            .setFriction(options.friction ?? 0.75)
-            .setRestitution(options.restitution ?? 0.08);
+            .setDensity(density)
+            .setFriction(options.friction ?? 0.85)
+            .setRestitution(options.restitution ?? 0.18);
 
-        this.world.createCollider(collider, body);
-
-        const id = this.nextId++;
+        const collider = this.world.createCollider(
+            colliderDesc,
+            body
+        );
 
         const coin = {
             id,
             body,
+            collider,
             active: true,
-            frozen: false,
-            type: options.type ?? "coin",
-
-            lastPosition: {
-                x: position.x,
-                y: position.y,
-                z: position.z
-            },
-
-            lastRotation: {
-                x: 0,
-                y: 0,
-                z: 0,
-                w: 1
-            },
-
-            linearVelocity: {
-                x: 0,
-                y: 0,
-                z: 0
-            },
-
-            angularVelocity: {
-                x: 0,
-                y: 0,
-                z: 0
-            }
+            savedState: null,
+            radius,
+            thickness,
+            options,
+            lastPlayerPush: -Infinity
         };
 
         this.bodies.set(id, coin);
-
-        if (options.velocity) {
-            body.setLinvel(options.velocity, true);
-        }
-
-        if (options.angularVelocity) {
-            body.setAngvel(options.angularVelocity, true);
-        }
-
-        if (options.impulse) {
-            body.applyImpulse(options.impulse, true);
-        }
+        this.coins.set(id, coin);
 
         return coin;
     }
 
-    // =========================================
-    // MÜNZEN ALS STRÖMUNG ERZEUGEN
-    // =========================================
+    createFlowCoin(position, direction = {}, options = {}) {
+        const coin = this.createCoin(position, options);
 
-    createFlowCoin(position, direction = {}) {
+        if (!coin) return null;
 
-        const spread = 0.8;
+        const speed = options.speed ?? 2.5;
 
-        const velocity = {
-            x: (direction.x ?? 0) + (Math.random() - 0.5) * spread,
-            y: (direction.y ?? 0) + Math.random() * 0.8,
-            z: (direction.z ?? 0) + (Math.random() - 0.5) * spread
-        };
+        const dx = direction.x ?? 0;
+        const dy = direction.y ?? 0;
+        const dz = direction.z ?? 0;
 
-        const angularVelocity = {
-            x: (Math.random() - 0.5) * 5,
-            y: (Math.random() - 0.5) * 5,
-            z: (Math.random() - 0.5) * 5
-        };
+        coin.body.setLinvel({
+            x: dx * speed + (Math.random() - 0.5) * 0.8,
+            y: dy * speed + Math.random() * 1.2,
+            z: dz * speed + (Math.random() - 0.5) * 0.8
+        }, true);
 
-        return this.createCoin(position, {
-            velocity,
-            angularVelocity,
-            friction: 0.65,
-            restitution: 0.06,
-            linearDamping: 0.06,
-            angularDamping: 0.1
-        });
+        coin.body.setAngvel({
+            x: (Math.random() - 0.5) * 8,
+            y: (Math.random() - 0.5) * 8,
+            z: (Math.random() - 0.5) * 8
+        }, true);
+
+        return coin;
     }
 
-    // =========================================
-    // FESTE KOLLISIONSOBJEKTE
-    // =========================================
-
     createStaticBox(position, size, options = {}) {
+        this.ensureInitialized();
 
-        const body = this.world.createRigidBody(
-            RAPIER.RigidBodyDesc.fixed()
-                .setTranslation(
-                    position.x,
-                    position.y,
-                    position.z
-                )
-        );
+        const bodyDesc = RAPIER.RigidBodyDesc.fixed()
+            .setTranslation(position.x, position.y, position.z);
 
-        const collider = RAPIER.ColliderDesc.cuboid(
+        const body = this.world.createRigidBody(bodyDesc);
+
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(
             size.x / 2,
             size.y / 2,
             size.z / 2
         )
-            .setFriction(options.friction ?? 0.8)
-            .setRestitution(options.restitution ?? 0.02);
+            .setFriction(options.friction ?? 0.9)
+            .setRestitution(options.restitution ?? 0.05);
 
-        this.world.createCollider(collider, body);
+        const collider = this.world.createCollider(
+            colliderDesc,
+            body
+        );
 
-        return body;
+        this.staticBodies.push(body);
+
+        return { body, collider };
     }
 
-    // =========================================
-    // IMPULSE / SCHUB
-    // =========================================
-
     pushCoin(coin, impulse) {
+        if (!coin?.active || !coin.body) return;
 
-        if (!coin || !coin.active || !coin.body) return;
-
-        coin.body.applyImpulse(impulse, true);
+        coin.body.applyImpulse({
+            x: impulse.x ?? 0,
+            y: impulse.y ?? 0,
+            z: impulse.z ?? 0
+        }, true);
     }
 
     pushArea(center, radius, strength, direction = {}) {
-
-        const radiusSq = radius * radius;
-
         for (const coin of this.bodies.values()) {
-
-            if (!coin.active || !coin.body) continue;
+            if (!coin.body) continue;
 
             const p = coin.body.translation();
 
@@ -219,44 +177,113 @@ export class PhysicsSystem {
             const dy = p.y - center.y;
             const dz = p.z - center.z;
 
-            const distanceSq =
-                dx * dx + dy * dy + dz * dz;
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-            if (distanceSq > radiusSq || distanceSq < 0.0001) {
-                continue;
-            }
+            if (distance >= radius || distance < 0.001) continue;
 
-            const distance = Math.sqrt(distanceSq);
-            const power = strength * (1 - distance / radius);
+            const falloff = 1 - distance / radius;
 
-            const impulse = {
-                x: (direction.x ?? dx / distance) * power,
-                y: (direction.y ?? 0.15) * power,
-                z: (direction.z ?? dz / distance) * power
-            };
+            const nx = direction.x ?? dx / distance;
+            const ny = direction.y ?? dy / distance;
+            const nz = direction.z ?? dz / distance;
 
-            coin.body.applyImpulse(impulse, true);
+            const force = strength * falloff;
+
+            coin.body.applyImpulse({
+                x: nx * force,
+                y: ny * force + force * 0.12,
+                z: nz * force
+            }, true);
+
+            coin.body.applyTorqueImpulse({
+                x: (Math.random() - 0.5) * force,
+                y: (Math.random() - 0.5) * force,
+                z: (Math.random() - 0.5) * force
+            }, true);
         }
     }
 
-    // =========================================
-    // FÖRDERBAND
-    // =========================================
+    // Spieler stößt Münzen beim Laufen weg.
+    pushCoinsNearPlayer(position, velocity, radius = 1.25) {
+        const speed = Math.sqrt(
+            velocity.x * velocity.x +
+            velocity.y * velocity.y +
+            velocity.z * velocity.z
+        );
 
+        if (speed < 0.15) return;
+
+        const horizontalSpeed = Math.sqrt(
+            velocity.x * velocity.x +
+            velocity.z * velocity.z
+        );
+
+        if (horizontalSpeed < 0.01) return;
+
+        const moveX = velocity.x / horizontalSpeed;
+        const moveZ = velocity.z / horizontalSpeed;
+
+        const strength = Math.min(speed * 2.5, 9);
+
+        for (const coin of this.bodies.values()) {
+            if (!coin.body) continue;
+
+            const p = coin.body.translation();
+
+            const dx = p.x - position.x;
+            const dy = p.y - position.y;
+            const dz = p.z - position.z;
+
+            const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+
+            if (horizontalDistance > radius) continue;
+            if (Math.abs(dy) > 1.1) continue;
+
+            // Verhindert, dass dieselbe Münze pro Frame
+            // immer wieder einen starken Stoß erhält.
+            if (this.elapsed - coin.lastPlayerPush < 0.12) {
+                continue;
+            }
+
+            const distance = Math.max(horizontalDistance, 0.05);
+            const falloff = 1 - horizontalDistance / radius;
+
+            // Mischung aus Laufrichtung und Richtung vom Spieler weg.
+            const awayX = dx / distance;
+            const awayZ = dz / distance;
+
+            const dirX = moveX * 0.65 + awayX * 0.35;
+            const dirZ = moveZ * 0.65 + awayZ * 0.35;
+
+            const force = strength * falloff;
+
+            coin.body.applyImpulse({
+                x: dirX * force,
+                y: 0.25 * force,
+                z: dirZ * force
+            }, true);
+
+            coin.body.applyTorqueImpulse({
+                x: (Math.random() - 0.5) * force * 0.8,
+                y: (Math.random() - 0.5) * force * 0.5,
+                z: (Math.random() - 0.5) * force * 0.8
+            }, true);
+
+            coin.lastPlayerPush = this.elapsed;
+        }
+    }
+
+    // Bewegung auf einem Förderband.
     applyConveyor(position, size, velocity, strength = 0.08) {
-
         const minX = position.x - size.x / 2;
         const maxX = position.x + size.x / 2;
-
         const minY = position.y - size.y / 2;
         const maxY = position.y + size.y / 2;
-
         const minZ = position.z - size.z / 2;
         const maxZ = position.z + size.z / 2;
 
         for (const coin of this.bodies.values()) {
-
-            if (!coin.active || !coin.body) continue;
+            if (!coin.body) continue;
 
             const p = coin.body.translation();
 
@@ -264,7 +291,9 @@ export class PhysicsSystem {
                 p.x < minX || p.x > maxX ||
                 p.y < minY || p.y > maxY ||
                 p.z < minZ || p.z > maxZ
-            ) continue;
+            ) {
+                continue;
+            }
 
             const current = coin.body.linvel();
 
@@ -273,182 +302,154 @@ export class PhysicsSystem {
                 y: current.y,
                 z: current.z + (velocity.z - current.z) * strength
             }, true);
+
+            coin.body.applyTorqueImpulse({
+                x: velocity.z * 0.015,
+                y: 0,
+                z: -velocity.x * 0.015
+            }, true);
         }
     }
 
-    // =========================================
-    // MÜNZE EINFIEREN
-    // =========================================
+    saveState(coin) {
+        if (!coin?.body) return;
+
+        const p = coin.body.translation();
+        const r = coin.body.rotation();
+        const v = coin.body.linvel();
+        const a = coin.body.angvel();
+
+        coin.savedState = {
+            position: { x: p.x, y: p.y, z: p.z },
+            rotation: { x: r.x, y: r.y, z: r.z, w: r.w },
+            velocity: { x: v.x, y: v.y, z: v.z },
+            angularVelocity: { x: a.x, y: a.y, z: a.z }
+        };
+    }
 
     freezeCoin(coin) {
-
-        if (!coin || !coin.active || !coin.body) return;
+        if (!coin?.active || !coin.body) return;
 
         this.saveState(coin);
 
         this.world.removeRigidBody(coin.body);
 
+        this.bodies.delete(coin.id);
+
         coin.body = null;
+        coin.collider = null;
         coin.active = false;
-        coin.frozen = true;
     }
-
-    // =========================================
-    // PHYSIKZUSTAND SPEICHERN
-    // =========================================
-
-    saveState(coin) {
-
-        if (!coin.body) return;
-
-        const p = coin.body.translation();
-        const r = coin.body.rotation();
-
-        const v = coin.body.linvel();
-        const a = coin.body.angvel();
-
-        coin.lastPosition = {
-            x: p.x,
-            y: p.y,
-            z: p.z
-        };
-
-        coin.lastRotation = {
-            x: r.x,
-            y: r.y,
-            z: r.z,
-            w: r.w
-        };
-
-        coin.linearVelocity = {
-            x: v.x,
-            y: v.y,
-            z: v.z
-        };
-
-        coin.angularVelocity = {
-            x: a.x,
-            y: a.y,
-            z: a.z
-        };
-    }
-
-    // =========================================
-    // PHYSIK FORTSETZEN
-    // =========================================
 
     resumeCoin(coin) {
+        this.ensureInitialized();
 
-        if (!coin || !coin.frozen) return false;
+        if (!coin || coin.active || !coin.savedState) return false;
 
         if (this.bodies.size >= this.maxBodies) {
             return false;
         }
 
-        const p = coin.lastPosition;
+        const state = coin.savedState;
 
-        const restored = this.createCoin(
-            p,
-            {
-                velocity: coin.linearVelocity,
-                angularVelocity: coin.angularVelocity
-            }
+        const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(
+                state.position.x,
+                state.position.y,
+                state.position.z
+            )
+            .setRotation(state.rotation)
+            .setLinvel(
+                state.velocity.x,
+                state.velocity.y,
+                state.velocity.z
+            )
+            .setAngvel(
+                state.angularVelocity.x,
+                state.angularVelocity.y,
+                state.angularVelocity.z
+            )
+            .setLinearDamping(coin.options.linearDamping ?? 0.12)
+            .setAngularDamping(coin.options.angularDamping ?? 0.18)
+            .setCcdEnabled(true);
+
+        const body = this.world.createRigidBody(bodyDesc);
+
+        const colliderDesc = RAPIER.ColliderDesc.cylinder(
+            coin.thickness / 2,
+            coin.radius
+        )
+            .setDensity(coin.options.density ?? 2.5)
+            .setFriction(coin.options.friction ?? 0.85)
+            .setRestitution(coin.options.restitution ?? 0.18);
+
+        const collider = this.world.createCollider(
+            colliderDesc,
+            body
         );
 
-        if (!restored) return false;
-
-        const body = restored.body;
-        const r = coin.lastRotation;
-
-        body.setRotation(r, true);
-
-        this.bodies.delete(restored.id);
-
         coin.body = body;
+        coin.collider = collider;
         coin.active = true;
-        coin.frozen = false;
+
+        this.bodies.set(coin.id, coin);
 
         return true;
     }
 
-    // =========================================
-    // CHUNK EINFIEREN
-    // =========================================
-
     freezeMany(coins) {
-
         for (const coin of coins) {
             this.freezeCoin(coin);
         }
     }
 
-    // =========================================
-    // PHYSIK-UPDATE
-    // =========================================
-
     update(deltaTime) {
+        if (!this.initialized) return;
 
-        if (!this.ready) return;
+        const dt = Math.min(deltaTime, 0.1);
 
-        this.accumulator += Math.min(deltaTime, 0.05);
+        this.elapsed += dt;
+        this.accumulator += dt;
 
         let steps = 0;
+        const maxSteps = 5;
 
         while (
             this.accumulator >= this.fixedTimeStep &&
-            steps < 4
+            steps < maxSteps
         ) {
-
-            this.world.step();
+            this.world.step(this.eventQueue);
 
             this.accumulator -= this.fixedTimeStep;
             steps++;
         }
 
-        if (steps === 4) {
+        // Verhindert große Nachhol-Simulationen nach langen Pausen.
+        if (steps >= maxSteps) {
             this.accumulator = 0;
         }
     }
 
-    // =========================================
-    // POSITION ABFRAGEN
-    // =========================================
-
     getTransform(coin) {
-
-        if (!coin) return null;
-
-        if (coin.body && coin.active) {
-
-            const p = coin.body.translation();
-            const r = coin.body.rotation();
-
-            coin.lastPosition = {
-                x: p.x,
-                y: p.y,
-                z: p.z
-            };
-
-            coin.lastRotation = {
-                x: r.x,
-                y: r.y,
-                z: r.z,
-                w: r.w
-            };
+        if (!coin?.body || !coin.active) {
+            return coin?.savedState
+                ? {
+                    position: coin.savedState.position,
+                    rotation: coin.savedState.rotation
+                }
+                : null;
         }
 
+        const p = coin.body.translation();
+        const r = coin.body.rotation();
+
         return {
-            position: coin.lastPosition,
-            rotation: coin.lastRotation
+            position: { x: p.x, y: p.y, z: p.z },
+            rotation: { x: r.x, y: r.y, z: r.z, w: r.w }
         };
     }
 
-    // =========================================
-    // MÜNZE ENTFERNEN
-    // =========================================
-
     removeCoin(coin) {
-
         if (!coin) return;
 
         if (coin.body) {
@@ -456,32 +457,41 @@ export class PhysicsSystem {
         }
 
         this.bodies.delete(coin.id);
+        this.coins.delete(coin.id);
 
         coin.body = null;
+        coin.collider = null;
         coin.active = false;
-        coin.frozen = false;
     }
-
-    // =========================================
-    // AKTIVE MÜNZEN
-    // =========================================
 
     getActiveCount() {
         return this.bodies.size;
     }
 
-    // =========================================
-    // AUFRÄUMEN
-    // =========================================
+    getCoinCount() {
+        return this.coins.size;
+    }
+
+    ensureInitialized() {
+        if (!this.initialized) {
+            throw new Error(
+                "PhysicsSystem wurde noch nicht initialisiert. Erst await physics.init() aufrufen."
+            );
+        }
+    }
 
     destroy() {
+        if (!this.initialized) return;
 
-        if (this.world) {
-            this.world.free();
-        }
+        this.world.free();
+        this.eventQueue?.free();
 
         this.bodies.clear();
+        this.coins.clear();
+        this.staticBodies = [];
+
         this.world = null;
-        this.ready = false;
+        this.eventQueue = null;
+        this.initialized = false;
     }
 }

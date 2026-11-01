@@ -5,44 +5,48 @@ import {
     mergeGeometries
 } from "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/utils/BufferGeometryUtils.js";
 
-
 export class CoinFactory {
 
     constructor(options = {}) {
 
         this.radius = options.radius ?? 0.18;
         this.thickness = options.thickness ?? 0.035;
-
         this.detailLevel = options.detailLevel ?? 64;
+
+        this.disposed = false;
+
+        // ==================================================
+        // MATERIALIEN
+        // ==================================================
 
         this.materials = {
 
             gold: new THREE.MeshStandardMaterial({
-                color: 0xE9A817,
+                color: 0xD99A19,
                 metalness: 0.96,
-                roughness: 0.22
+                roughness: 0.24
             }),
 
             brightGold: new THREE.MeshStandardMaterial({
-                color: 0xFFD95A,
+                color: 0xFFD45B,
                 metalness: 0.98,
                 roughness: 0.17
             }),
 
             darkGold: new THREE.MeshStandardMaterial({
-                color: 0x9D640A,
+                color: 0x85500B,
                 metalness: 0.94,
                 roughness: 0.29
             }),
 
             edge: new THREE.MeshStandardMaterial({
-                color: 0xC58A12,
+                color: 0xB77A12,
                 metalness: 0.97,
                 roughness: 0.2
             }),
 
             highlight: new THREE.MeshStandardMaterial({
-                color: 0xFFF0A0,
+                color: 0xFFF0AC,
                 metalness: 0.98,
                 roughness: 0.13
             })
@@ -50,26 +54,64 @@ export class CoinFactory {
 
         this.geometry = this.createGeometry();
 
-        this.instancedGeometry = this.createMergedGeometry();
+        const merged = this.createMergedGeometry();
+
+        this.instancedGeometry = merged.geometry;
+        this.instancedMaterials = merged.materials;
 
         this.tempMatrix = new THREE.Matrix4();
         this.tempPosition = new THREE.Vector3();
         this.tempScale = new THREE.Vector3();
         this.tempQuaternion = new THREE.Quaternion();
 
-        this.disposed = false;
     }
 
 
     // ==================================================
-    // MÜNZEN-GEOMETRIE
+    // KOMPLETTE MÜNZE
     // ==================================================
 
     createGeometry() {
 
         const group = new THREE.Group();
 
-        // Hauptkörper
+        group.name = "PremiumGoldCoin";
+
+        this.addCoinBody(group);
+
+        this.addFace(group, 1);
+        this.addFace(group, -1);
+
+        this.addRim(group);
+        this.addDecorativeRings(group);
+        this.addEdgeDetails(group);
+        this.addMicroDetails(group);
+
+        group.traverse(object => {
+
+            if (!object.isMesh) return;
+
+            object.castShadow = true;
+            object.receiveShadow = true;
+
+        });
+
+        group.userData.isCoin = true;
+        group.userData.radius = this.radius;
+        group.userData.thickness = this.thickness;
+
+        group.updateMatrixWorld(true);
+
+        return group;
+    }
+
+
+    // ==================================================
+    // MÜNZENKÖRPER
+    // ==================================================
+
+    addCoinBody(group) {
+
         const bodyGeometry = new THREE.CylinderGeometry(
             this.radius,
             this.radius,
@@ -84,63 +126,39 @@ export class CoinFactory {
             this.materials.gold
         );
 
+        // Z ist die Vorderseite der Münze.
         body.rotation.x = Math.PI / 2;
+
         group.add(body);
 
+        // Dünner zusätzlicher Randkörper
+        const innerGeometry = new THREE.CylinderGeometry(
+            this.radius * 0.965,
+            this.radius * 0.965,
+            this.thickness * 1.04,
+            this.detailLevel,
+            1,
+            false
+        );
 
-        // Vorder- und Rückseite
-        this.addFace(group, 1);
-        this.addFace(group, -1);
+        const inner = new THREE.Mesh(
+            innerGeometry,
+            this.materials.edge
+        );
 
+        inner.rotation.x = Math.PI / 2;
 
-        // Äußerer Rand
-        this.addRim(group);
-
-
-        // Zusätzliche feine Ringe
-        this.addDecorativeRings(group);
-
-
-        // Rillen am Münzrand
-        this.addEdgeDetails(group);
-
-
-        // Zusätzliche Prägung
-        this.addMicroDetails(group);
-
-
-        group.traverse(object => {
-
-            if (!object.isMesh) return;
-
-            object.castShadow = true;
-            object.receiveShadow = true;
-
-        });
-
-        return group;
+        group.add(inner);
     }
 
 
     // ==================================================
-    // MÜNZENFLÄCHEN
+    // STERNFORM
     // ==================================================
 
-    addFace(group, side) {
+    createStarGeometry(outerRadius, innerRadius) {
 
-        const z = side * (
-            this.thickness / 2 + 0.004
-        );
-
-        const face = new THREE.Group();
-
-        face.position.z = z;
-
-        // Zentraler Stern
-        const starShape = new THREE.Shape();
-
-        const outerRadius = this.radius * 0.34;
-        const innerRadius = this.radius * 0.145;
+        const shape = new THREE.Shape();
 
         for (let i = 0; i < 10; i++) {
 
@@ -156,58 +174,84 @@ export class CoinFactory {
             const y = Math.sin(angle) * radius;
 
             if (i === 0) {
-                starShape.moveTo(x, y);
+                shape.moveTo(x, y);
             } else {
-                starShape.lineTo(x, y);
+                shape.lineTo(x, y);
             }
         }
 
-        starShape.closePath();
+        shape.closePath();
 
-        const starGeometry = new THREE.ExtrudeGeometry(
-            starShape,
-            {
-                depth: 0.004,
-                bevelEnabled: true,
-                bevelSegments: 3,
-                steps: 1,
-                bevelSize: 0.002,
-                bevelThickness: 0.001,
-                curveSegments: 12
-            }
-        );
+        return new THREE.ExtrudeGeometry(shape, {
+            depth: 0.006,
+            bevelEnabled: true,
+            bevelSegments: 3,
+            bevelSize: 0.002,
+            bevelThickness: 0.0015,
+            steps: 1,
+            curveSegments: 12
+        });
+    }
 
+
+    // ==================================================
+    // VORDER- UND RÜCKSEITE
+    // ==================================================
+
+    addFace(group, side) {
+
+        const face = new THREE.Group();
+
+        face.name = side > 0
+            ? "CoinFront"
+            : "CoinBack";
+
+        face.position.z =
+            side * (this.thickness / 2 + 0.003);
+
+        if (side < 0) {
+            face.rotation.y = Math.PI;
+        }
+
+        // Zentraler großer Stern
         const star = new THREE.Mesh(
-            starGeometry,
+            this.createStarGeometry(
+                this.radius * 0.34,
+                this.radius * 0.145
+            ),
             this.materials.highlight
         );
 
-        star.position.z = 0.001;
+        star.position.z = 0.002;
 
         face.add(star);
 
 
-        // Innerer Kreis um den Stern
-        const centerRing = new THREE.Mesh(
-            new THREE.TorusGeometry(
-                this.radius * 0.46,
-                this.radius * 0.018,
-                10,
-                64
-            ),
-            this.materials.darkGold
+        // Innerer Ring
+        this.addTorus(
+            face,
+            this.radius * 0.46,
+            this.radius * 0.025,
+            this.materials.darkGold,
+            0.002
         );
 
-        centerRing.position.z = 0.001;
 
-        face.add(centerRing);
+        // Zweiter feiner Ring
+        this.addTorus(
+            face,
+            this.radius * 0.54,
+            this.radius * 0.012,
+            this.materials.brightGold,
+            0.001
+        );
 
 
-        // Kleine geprägte Punkte
-        const dotGeometry = new THREE.SphereGeometry(
-            this.radius * 0.025,
-            12,
-            10
+        // Dekorative Strahlen um den Stern
+        const rayGeometry = new THREE.BoxGeometry(
+            this.radius * 0.018,
+            this.radius * 0.20,
+            0.003
         );
 
         for (let i = 0; i < 16; i++) {
@@ -215,14 +259,43 @@ export class CoinFactory {
             const angle =
                 i / 16 * Math.PI * 2;
 
-            const dot = new THREE.Mesh(
-                dotGeometry,
+            const ray = new THREE.Mesh(
+                rayGeometry,
                 this.materials.brightGold
             );
 
+            ray.position.set(
+                Math.cos(angle) * this.radius * 0.66,
+                Math.sin(angle) * this.radius * 0.66,
+                0.002
+            );
+
+            ray.rotation.z = angle - Math.PI / 2;
+
+            face.add(ray);
+        }
+
+
+        // Große Randpunkte
+        const dotGeometry = new THREE.SphereGeometry(
+            this.radius * 0.025,
+            12,
+            8
+        );
+
+        for (let i = 0; i < 24; i++) {
+
+            const angle =
+                i / 24 * Math.PI * 2;
+
+            const dot = new THREE.Mesh(
+                dotGeometry,
+                this.materials.highlight
+            );
+
             dot.position.set(
-                Math.cos(angle) * this.radius * 0.79,
-                Math.sin(angle) * this.radius * 0.79,
+                Math.cos(angle) * this.radius * 0.82,
+                Math.sin(angle) * this.radius * 0.82,
                 0.003
             );
 
@@ -230,34 +303,30 @@ export class CoinFactory {
         }
 
 
-        // Äußerer Prägestreifen
-        const outerDots = 32;
+        // Äußerer feiner Punktring
+        const smallDotGeometry = new THREE.SphereGeometry(
+            this.radius * 0.012,
+            8,
+            6
+        );
 
-        for (let i = 0; i < outerDots; i++) {
+        for (let i = 0; i < 48; i++) {
 
             const angle =
-                i / outerDots * Math.PI * 2;
+                i / 48 * Math.PI * 2;
 
             const dot = new THREE.Mesh(
-                dotGeometry,
-                this.materials.highlight
+                smallDotGeometry,
+                this.materials.darkGold
             );
 
-            dot.scale.setScalar(0.55);
-
             dot.position.set(
-                Math.cos(angle) * this.radius * 0.91,
-                Math.sin(angle) * this.radius * 0.91,
+                Math.cos(angle) * this.radius * 0.94,
+                Math.sin(angle) * this.radius * 0.94,
                 0.002
             );
 
             face.add(dot);
-        }
-
-
-        // Rückseite drehen
-        if (side < 0) {
-            face.rotation.y = Math.PI;
         }
 
         group.add(face);
@@ -265,68 +334,76 @@ export class CoinFactory {
 
 
     // ==================================================
-    // ÄUSSERER MÜNZENRAND
+    // TORUS-HILFSFUNKTION
+    // ==================================================
+
+    addTorus(
+        parent,
+        radius,
+        tube,
+        material,
+        z = 0
+    ) {
+
+        const mesh = new THREE.Mesh(
+            new THREE.TorusGeometry(
+                radius,
+                tube,
+                10,
+                96
+            ),
+            material
+        );
+
+        mesh.position.z = z;
+
+        parent.add(mesh);
+
+        return mesh;
+    }
+
+
+    // ==================================================
+    // ÄUSSERER RAND
     // ==================================================
 
     addRim(group) {
 
-        const rimGeometry = new THREE.TorusGeometry(
+        // Vorderer heller Rand
+        this.addTorus(
+            group,
             this.radius * 0.91,
             this.radius * 0.055,
-            12,
-            96
+            this.materials.brightGold,
+            this.thickness / 2 + 0.002
         );
 
-        const front = new THREE.Mesh(
-            rimGeometry,
-            this.materials.brightGold
+        // Hinterer heller Rand
+        this.addTorus(
+            group,
+            this.radius * 0.91,
+            this.radius * 0.055,
+            this.materials.brightGold,
+            -this.thickness / 2 - 0.002
         );
 
-        front.position.z =
-            this.thickness / 2 + 0.003;
-
-        group.add(front);
-
-
-        const back = new THREE.Mesh(
-            rimGeometry,
-            this.materials.brightGold
-        );
-
-        back.position.z =
-            -this.thickness / 2 - 0.003;
-
-        group.add(back);
-
-
-        // Äußerer schmaler Metallring
-        const outerGeometry = new THREE.TorusGeometry(
+        // Äußerer Metallring vorne
+        this.addTorus(
+            group,
             this.radius * 0.975,
             this.radius * 0.012,
-            8,
-            96
+            this.materials.highlight,
+            this.thickness / 2
         );
 
-        const outerFront = new THREE.Mesh(
-            outerGeometry,
-            this.materials.edge
+        // Äußerer Metallring hinten
+        this.addTorus(
+            group,
+            this.radius * 0.975,
+            this.radius * 0.012,
+            this.materials.edge,
+            -this.thickness / 2
         );
-
-        outerFront.position.z =
-            this.thickness / 2;
-
-        group.add(outerFront);
-
-
-        const outerBack = new THREE.Mesh(
-            outerGeometry,
-            this.materials.edge
-        );
-
-        outerBack.position.z =
-            -this.thickness / 2;
-
-        group.add(outerBack);
     }
 
 
@@ -338,40 +415,38 @@ export class CoinFactory {
 
         const rings = [
             {
-                radius: 0.68,
-                thickness: 0.018,
+                radius: 0.66,
+                thickness: 0.012,
                 material: this.materials.darkGold
             },
             {
-                radius: 0.73,
-                thickness: 0.009,
+                radius: 0.70,
+                thickness: 0.008,
                 material: this.materials.highlight
             },
             {
-                radius: 0.84,
-                thickness: 0.012,
+                radius: 0.76,
+                thickness: 0.009,
                 material: this.materials.edge
             }
         ];
 
         for (const settings of rings) {
 
-            const geometry = new THREE.TorusGeometry(
-                this.radius * settings.radius,
-                this.radius * settings.thickness,
-                8,
-                72
-            );
-
             for (const side of [-1, 1]) {
 
                 const ring = new THREE.Mesh(
-                    geometry,
+                    new THREE.TorusGeometry(
+                        this.radius * settings.radius,
+                        this.radius * settings.thickness,
+                        8,
+                        96
+                    ),
                     settings.material
                 );
 
                 ring.position.z =
-                    side * (this.thickness / 2 + 0.004);
+                    side * (this.thickness / 2 + 0.003);
 
                 group.add(ring);
             }
@@ -385,12 +460,12 @@ export class CoinFactory {
 
     addEdgeDetails(group) {
 
-        const count = 64;
+        const count = 80;
 
-        const detailGeometry = new THREE.BoxGeometry(
-            0.007,
-            0.014,
-            this.thickness * 0.78
+        const geometry = new THREE.BoxGeometry(
+            0.006,
+            0.012,
+            this.thickness * 0.82
         );
 
         for (let i = 0; i < count; i++) {
@@ -399,8 +474,10 @@ export class CoinFactory {
                 i / count * Math.PI * 2;
 
             const detail = new THREE.Mesh(
-                detailGeometry,
-                this.materials.highlight
+                geometry,
+                i % 2 === 0
+                    ? this.materials.highlight
+                    : this.materials.darkGold
             );
 
             detail.position.set(
@@ -417,13 +494,13 @@ export class CoinFactory {
 
 
     // ==================================================
-    // KLEINE PRÄGEDETAILS
+    // FEINE MIKROPRÄGUNG
     // ==================================================
 
     addMicroDetails(group) {
 
         const geometry = new THREE.SphereGeometry(
-            this.radius * 0.012,
+            this.radius * 0.009,
             8,
             6
         );
@@ -433,12 +510,16 @@ export class CoinFactory {
             const detailGroup = new THREE.Group();
 
             detailGroup.position.z =
-                side * (this.thickness / 2 + 0.005);
+                side * (this.thickness / 2 + 0.004);
 
-            for (let i = 0; i < 24; i++) {
+            if (side < 0) {
+                detailGroup.rotation.y = Math.PI;
+            }
+
+            for (let i = 0; i < 40; i++) {
 
                 const angle =
-                    i / 24 * Math.PI * 2;
+                    i / 40 * Math.PI * 2;
 
                 const detail = new THREE.Mesh(
                     geometry,
@@ -452,10 +533,6 @@ export class CoinFactory {
                 );
 
                 detailGroup.add(detail);
-            }
-
-            if (side < 0) {
-                detailGroup.rotation.y = Math.PI;
             }
 
             group.add(detailGroup);
@@ -484,7 +561,7 @@ export class CoinFactory {
         });
 
 
-        // Alle Münzenteile nach Material sortieren
+        // Meshes nach Material sortieren
         group.traverse(object => {
 
             if (!object.isMesh) return;
@@ -494,22 +571,32 @@ export class CoinFactory {
 
             if (materialIndex === undefined) return;
 
-            const geometry = object.geometry.clone();
+            let geometry = object.geometry.clone();
 
             geometry.applyMatrix4(object.matrixWorld);
+
+            // Einheitlich nicht-indizierte Geometrien verwenden.
+            if (geometry.index) {
+                const nonIndexed = geometry.toNonIndexed();
+                geometry.dispose();
+                geometry = nonIndexed;
+            }
+
+            geometry.clearGroups();
 
             geometryGroups[materialIndex].push(geometry);
         });
 
 
-        // Geometrien je Material zusammenführen
-        const mergedByMaterial = [];
+        // Je Material zusammenführen
+        const mergedGeometries = [];
+        const mergedMaterials = [];
 
-        for (const geometries of geometryGroups) {
+        for (let i = 0; i < geometryGroups.length; i++) {
 
-            if (geometries.length === 0) {
-                continue;
-            }
+            const geometries = geometryGroups[i];
+
+            if (geometries.length === 0) continue;
 
             const merged = mergeGeometries(
                 geometries,
@@ -520,46 +607,53 @@ export class CoinFactory {
                 geometry.dispose();
             }
 
-            if (merged) {
-                mergedByMaterial.push(merged);
+            if (!merged) {
+                throw new Error(
+                    "Münzgeometrie konnte nicht zusammengeführt werden."
+                );
             }
+
+            mergedGeometries.push(merged);
+            mergedMaterials.push(materialList[i]);
         }
 
 
-        // Eine Gesamtgeometrie mit Materialgruppen
+        // Gesamtgeometrie mit Materialgruppen
         const finalGeometry = mergeGeometries(
-            mergedByMaterial,
+            mergedGeometries,
             true
         );
 
-        for (const geometry of mergedByMaterial) {
+        for (const geometry of mergedGeometries) {
             geometry.dispose();
         }
 
         if (!finalGeometry) {
             throw new Error(
-                "Die optimierte Münzgeometrie konnte nicht erstellt werden."
+                "Die finale Instanced-Münzgeometrie ist fehlgeschlagen."
             );
         }
 
+        finalGeometry.computeVertexNormals();
         finalGeometry.computeBoundingBox();
         finalGeometry.computeBoundingSphere();
 
-        return finalGeometry;
+        return {
+            geometry: finalGeometry,
+            materials: mergedMaterials
+        };
     }
 
 
     // ==================================================
-    // EINZELNE MÜNZE
+    // EINZELNE MÜNZE ERSTELLEN
     // ==================================================
 
     create(position = {}, options = {}) {
 
-        if (this.disposed) {
-            throw new Error("CoinFactory wurde bereits entsorgt.");
-        }
+        this.checkDisposed();
 
-        const coin = this.geometry.clone();
+        const coin = this.geometry.clone(true);
 
         coin.position.set(
             position.x ?? 0,
@@ -574,6 +668,10 @@ export class CoinFactory {
                 options.rotation.y ?? 0,
                 options.rotation.z ?? 0
             );
+        }
+
+        if (options.quaternion) {
+            coin.quaternion.copy(options.quaternion);
         }
 
         if (options.scale !== undefined) {
@@ -592,22 +690,25 @@ export class CoinFactory {
 
 
     // ==================================================
-    // INSTANCED MÜNZEN
+    // INSTANCED MESH ERSTELLEN
     // ==================================================
 
     createInstancedMesh(count, options = {}) {
 
-        if (this.disposed) {
-            throw new Error("CoinFactory wurde bereits entsorgt.");
-        }
+        this.checkDisposed();
 
-        count = Math.max(1, Math.floor(count));
+        const capacity = Math.max(
+            1,
+            Math.floor(count)
+        );
 
         const mesh = new THREE.InstancedMesh(
             this.instancedGeometry,
-            Object.values(this.materials),
-            count
+            this.instancedMaterials,
+            capacity
         );
+
+        mesh.name = options.name ?? "CoinCollection";
 
         mesh.instanceMatrix.setUsage(
             THREE.DynamicDrawUsage
@@ -616,28 +717,23 @@ export class CoinFactory {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
-        mesh.frustumCulled = true;
-
-        mesh.count = count;
+        // Bei dynamischen Instanzen keine falsche Frustum-Grenze.
+        mesh.frustumCulled = false;
 
         mesh.userData.isCoinCollection = true;
         mesh.userData.coinRadius = this.radius;
         mesh.userData.coinThickness = this.thickness;
+        mesh.userData.coinCapacity = capacity;
 
-        mesh.userData.coinCapacity = count;
-
-        if (options.name) {
-            mesh.name = options.name;
-        }
-
-        // Alle Instanzen zunächst unsichtbar positionieren
+        // Anfangszustand: unsichtbar
         const dummy = new THREE.Object3D();
 
+        dummy.position.set(0, -10000, 0);
         dummy.scale.setScalar(0);
 
         dummy.updateMatrix();
 
-        for (let i = 0; i < count; i++) {
+        for (let i = 0; i < capacity; i++) {
             mesh.setMatrixAt(i, dummy.matrix);
         }
 
@@ -665,7 +761,10 @@ export class CoinFactory {
             return false;
         }
 
-        if (index < 0 || index >= mesh.userData.coinCapacity) {
+        if (
+            index < 0 ||
+            index >= mesh.userData.coinCapacity
+        ) {
             return false;
         }
 
@@ -676,11 +775,8 @@ export class CoinFactory {
         );
 
         if (quaternion) {
-
             this.tempQuaternion.copy(quaternion);
-
         } else {
-
             this.tempQuaternion.identity();
         }
 
@@ -701,7 +797,7 @@ export class CoinFactory {
 
 
     // ==================================================
-    // BATCH-UPDATE
+    // BATCH UPDATE
     // ==================================================
 
     commitInstancedMesh(mesh) {
@@ -712,12 +808,16 @@ export class CoinFactory {
 
         mesh.instanceMatrix.needsUpdate = true;
 
+        if (mesh.instanceColor) {
+            mesh.instanceColor.needsUpdate = true;
+        }
+
         mesh.computeBoundingSphere();
     }
 
 
     // ==================================================
-    // INSTANZ-FARBE
+    // INSTANZFARBE ÄNDERN
     // ==================================================
 
     setInstanceColor(mesh, index, color) {
@@ -726,16 +826,18 @@ export class CoinFactory {
             return false;
         }
 
-        if (index < 0 || index >= mesh.userData.coinCapacity) {
+        if (
+            index < 0 ||
+            index >= mesh.userData.coinCapacity
+        ) {
             return false;
         }
 
-        mesh.setColorAt(
-            index,
-            color instanceof THREE.Color
-                ? color
-                : new THREE.Color(color)
-        );
+        const threeColor = color instanceof THREE.Color
+            ? color
+            : new THREE.Color(color);
+
+        mesh.setColorAt(index, threeColor);
 
         mesh.instanceColor.needsUpdate = true;
 
@@ -744,7 +846,21 @@ export class CoinFactory {
 
 
     // ==================================================
-    // GEOMETRIE UND MATERIALIEN AUFRÄUMEN
+    // FEHLERPRÜFUNG
+    // ==================================================
+
+    checkDisposed() {
+
+        if (this.disposed) {
+            throw new Error(
+                "CoinFactory wurde bereits entsorgt."
+            );
+        }
+    }
+
+
+    // ==================================================
+    // AUFRÄUMEN
     // ==================================================
 
     dispose() {
@@ -773,13 +889,13 @@ export class CoinFactory {
         }
 
         this.geometry.clear();
-
     }
+
 }
 
 
 // ======================================================
-// STANDARD-COIN-FACTORY
+// STANDARD FACTORY
 // ======================================================
 
 export const coinFactory = new CoinFactory();

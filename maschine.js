@@ -271,7 +271,6 @@ export class CoinCountingMachine {
         const hopper = new THREE.Group();
         hopper.position.set(-0.75, 2.05, 0);
 
-        // Trichterwand
         const top = new THREE.Mesh(
             new THREE.CylinderGeometry(
                 0.78,
@@ -289,7 +288,6 @@ export class CoinCountingMachine {
         top.castShadow = true;
         hopper.add(top);
 
-        // Unterer Einfüllkanal
         this.addBox(
             "HopperChannel",
             { x: 0.7, y: 0.15, z: 0.55 },
@@ -318,7 +316,8 @@ export class CoinCountingMachine {
     createConveyor() {
         const conveyor = new THREE.Group();
 
-        conveyor.position.set(0.25, 1.75, 0.55);
+        // KORREKTUR: Förderband liegt jetzt auf der Münz-Z-Achse.
+        conveyor.position.set(0.25, 1.75, 0);
 
         this.belt = this.addBox(
             "ConveyorBelt",
@@ -663,9 +662,9 @@ export class CoinCountingMachine {
     // --------------------------------------------------
 
     createPhysicsColliders() {
-        // Boden unter dem Förderband
+        // Boden unter dem Förderband.
         const platform = this.physics.createStaticBox(
-            this.worldPoint(0.4, 1.65, 0.55),
+            this.worldPoint(0.4, 1.65, 0),
             {
                 x: 2.5 * this.scale,
                 y: 0.1 * this.scale,
@@ -676,10 +675,10 @@ export class CoinCountingMachine {
 
         this.staticColliders.push(platform);
 
-        // Seitliche Begrenzungen
+        // Seitliche Begrenzungen.
         for (const z of [-0.48, 0.48]) {
             const rail = this.physics.createStaticBox(
-                this.worldPoint(0.4, 1.85, 0.55 + z),
+                this.worldPoint(0.4, 1.85, z),
                 {
                     x: 2.5 * this.scale,
                     y: 0.35 * this.scale,
@@ -691,9 +690,9 @@ export class CoinCountingMachine {
             this.staticColliders.push(rail);
         }
 
-        // Kleine Auffangfläche unter dem Trichter
+        // Auffangfläche unter dem Trichter.
         const catcher = this.physics.createStaticBox(
-            this.worldPoint(-0.55, 1.65, 0.1),
+            this.worldPoint(-0.55, 1.65, 0),
             {
                 x: 0.9 * this.scale,
                 y: 0.1 * this.scale,
@@ -724,9 +723,6 @@ export class CoinCountingMachine {
         return accepted;
     }
 
-    // Kompatibilität mit der bisherigen addCoins()-Funktion:
-    // Münzen werden jetzt tatsächlich eingeworfen und nicht
-    // sofort auf dem Display addiert.
     addCoins(amount, valuePerCoin = 1) {
         return this.insertCoins(amount, {
             valuePerCoin
@@ -764,10 +760,12 @@ export class CoinCountingMachine {
 
         this.scene.add(visual);
 
+        const queuedCoin = this.coinQueue.shift();
+
         this.activeCoins.push({
             physicsCoin,
             visual,
-            value: this.coinQueue.shift()?.value ?? 1,
+            value: queuedCoin?.value ?? 1,
             counted: false
         });
 
@@ -793,27 +791,28 @@ export class CoinCountingMachine {
             this.spawnTimer -= this.spawnInterval;
         }
 
+        // Förderband-Mittelpunkt.
         const conveyorPosition = this.worldPoint(
-            0.45,
+            0.4,
             1.88,
-            0.55
+            0
         );
 
-        // Das Förderband schiebt die Münzen weiter.
+        // Münzen auf dem Band in Richtung Ausgabe schieben.
         if (this.running) {
             this.physics.applyConveyor(
                 conveyorPosition,
                 {
-                    x: 2.4 * this.scale,
-                    y: 0.65 * this.scale,
-                    z: 0.85 * this.scale
+                    x: 2.5 * this.scale,
+                    y: 0.7 * this.scale,
+                    z: 0.9 * this.scale
                 },
                 {
-                    x: 2.0 * this.scale,
+                    x: 3.5 * this.scale,
                     y: 0,
                     z: 0
                 },
-                0.075
+                0.18
             );
         }
 
@@ -832,10 +831,10 @@ export class CoinCountingMachine {
             const p = transform.position;
             const r = transform.rotation;
 
-            // Position übernehmen
+            // Visuelle Position aktualisieren.
             item.visual.position.set(p.x, p.y, p.z);
 
-            // Rapier-Rotation übernehmen
+            // Rapier-Rotation übernehmen.
             const rapierQuaternion = new THREE.Quaternion(
                 r.x,
                 r.y,
@@ -843,8 +842,6 @@ export class CoinCountingMachine {
                 r.w
             );
 
-            // Coin.js-Modell hat seine Münzfläche lokal auf der Z-Achse.
-            // Rapier-Zylinder stehen standardmäßig entlang der Y-Achse.
             const correction = new THREE.Quaternion().setFromAxisAngle(
                 new THREE.Vector3(1, 0, 0),
                 -Math.PI / 2
@@ -854,15 +851,21 @@ export class CoinCountingMachine {
                 rapierQuaternion.multiply(correction)
             );
 
-            // Münzen, die die Zählstation erreichen, werden gezählt.
-            const countingX = this.worldPoint(1.55, 0, 0).x;
+            // Zählbereich.
+            const countingX = this.worldPoint(1.05, 0, 0).x;
+            const centerZ = this.worldPoint(0, 0, 0).z;
+            const baseY = this.worldPoint(0, 0, 0).y;
+
+            const insideCountingZone =
+                p.x >= countingX &&
+                Math.abs(p.z - centerZ) < 0.48 * this.scale &&
+                p.y >= baseY + 1.35 * this.scale &&
+                p.y <= baseY + 2.6 * this.scale;
 
             if (
                 this.running &&
                 !item.counted &&
-                p.x > countingX &&
-                Math.abs(p.z - this.worldPoint(0, 0, 0).z) < 1.1 * this.scale &&
-                p.y > this.worldPoint(0, 0, 0).y + 0.7 * this.scale
+                insideCountingZone
             ) {
                 item.counted = true;
 
@@ -873,7 +876,7 @@ export class CoinCountingMachine {
                 continue;
             }
 
-            // Münzen entfernen, wenn sie außerhalb der Maschine fallen.
+            // Münzen außerhalb der Maschine entfernen.
             if (
                 p.y < this.position.y - 3 ||
                 Math.abs(p.x - this.position.x) > 20 ||
@@ -890,7 +893,6 @@ export class CoinCountingMachine {
 
         this.scene.remove(item.visual);
 
-        // Physikkörper und Collider entfernen.
         this.physics.removeCoin(item.physicsCoin);
 
         this.activeCoins.splice(index, 1);
@@ -925,7 +927,6 @@ export class CoinCountingMachine {
         this.drawDisplay();
     }
 
-    // Mausklick oder Touch auf die Knöpfe.
     handleClick(raycaster) {
         const hits = raycaster.intersectObjects(
             this.group.children,
@@ -1003,8 +1004,14 @@ export class CoinCountingMachine {
 
         // Statische Kollisionskörper entfernen.
         for (const collider of this.staticColliders) {
-            if (collider?.body && this.physics.world) {
-                this.physics.world.removeRigidBody(collider.body);
+            const body = collider?.body ?? collider?.rigidBody;
+
+            if (body && this.physics.world) {
+                try {
+                    this.physics.world.removeRigidBody(body);
+                } catch (error) {
+                    console.warn("Collider konnte nicht entfernt werden:", error);
+                }
             }
         }
 

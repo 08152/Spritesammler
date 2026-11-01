@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>One Million Coins</title>
+<title>ONE MILLION COINS</title>
 
 <style>
 * {
@@ -27,6 +27,7 @@ canvas {
 #hud {
     position: fixed;
     inset: 0;
+    z-index: 5;
     pointer-events: none;
 }
 
@@ -64,8 +65,8 @@ canvas {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
     border: 1px solid white;
     border-radius: 50%;
     transform: translate(-50%,-50%);
@@ -147,56 +148,7 @@ canvas {
     color: #ddd;
     font-size: 12px;
     text-shadow: 0 2px 5px black;
-}
-
-#startScreen {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0,0,0,.88);
-}
-
-.startPanel {
-    width: min(420px,90%);
-    background: #171817;
-    border: 1px solid #bd903d;
-    border-radius: 15px;
-    padding: 40px;
-    text-align: center;
-    box-shadow: 0 15px 70px #000;
-}
-
-.startPanel h1 {
-    font-size: 34px;
-    color: #ffd05b;
-    margin-bottom: 10px;
-}
-
-.startPanel p {
-    color: #aaa;
-    margin-bottom: 28px;
-}
-
-button {
-    border: none;
-    cursor: pointer;
-}
-
-#startButton {
-    width: 100%;
-    padding: 17px;
-    border-radius: 8px;
-    background: linear-gradient(135deg,#ffe08b,#bd831d);
-    color: #251900;
-    font-size: 18px;
-    font-weight: 900;
-}
-
-#startButton:hover {
-    filter: brightness(1.15);
+    white-space: nowrap;
 }
 
 #progress {
@@ -225,7 +177,7 @@ button {
     top: 110px;
     left: 50%;
     transform: translateX(-50%);
-    background: #171717eF;
+    background: #171717ef;
     border: 1px solid #bd903d;
     border-radius: 8px;
     padding: 12px 20px;
@@ -233,17 +185,89 @@ button {
     transition: opacity .2s;
 }
 
+#startScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        linear-gradient(#080909bb,#080909dd),
+        url("./backround.png") center / cover,
+        #080909;
+}
+
+.startPanel {
+    width: min(420px,90%);
+    background: #171817ed;
+    border: 1px solid #bd903d;
+    border-radius: 15px;
+    padding: 40px;
+    text-align: center;
+    box-shadow: 0 15px 70px #000;
+}
+
+.startPanel h1 {
+    font-size: 34px;
+    color: #ffd05b;
+    margin-bottom: 10px;
+}
+
+.startPanel p {
+    color: #aaa;
+    margin-bottom: 28px;
+}
+
+#startButton {
+    width: 100%;
+    padding: 17px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(135deg,#ffe08b,#bd831d);
+    color: #251900;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+#startButton:disabled {
+    opacity: .5;
+    cursor: wait;
+}
+
+#startButton:not(:disabled):hover {
+    filter: brightness(1.15);
+    transform: scale(1.02);
+}
+
+#loading {
+    color: #aaa;
+    font-size: 12px;
+    margin-top: 15px;
+}
+
 @media(max-width:650px) {
     .slot {
         width: 35px;
         height: 43px;
     }
+
     #inventory {
         gap: 3px;
         padding: 6px;
     }
+
     .panel {
         padding: 9px;
+    }
+
+    .big {
+        font-size: 17px;
+    }
+
+    #hint {
+        font-size: 10px;
     }
 }
 </style>
@@ -251,13 +275,20 @@ button {
 
 <body>
 
+<!-- STARTBILDSCHIRM -->
+
 <div id="startScreen">
     <div class="startPanel">
         <h1>ONE MILLION COINS</h1>
         <p>Collect. Deposit. Upgrade.</p>
-        <button id="startButton">SPIEL STARTEN</button>
+        <button id="startButton" disabled>
+            SPIEL WIRD GELADEN ...
+        </button>
+        <div id="loading">Lade Bunker und Spielsysteme ...</div>
     </div>
 </div>
+
+<!-- HUD -->
 
 <div id="hud">
 
@@ -284,18 +315,945 @@ button {
     <div id="crosshair"></div>
 
     <div id="hint">
-        WASD · Laufen &nbsp; | &nbsp; Maus · Umschauen &nbsp; | &nbsp; E · Interagieren
+        WASD · Laufen | Maus · Umschauen | Linksklick · Aufheben | Q · Ablegen | E · Einzahlen | F · Etage
     </div>
 
     <div id="interaction"></div>
-
     <div id="inventory"></div>
-
     <div id="message"></div>
 
 </div>
 
-<script type="module" src="game.js"></script>
+<!-- SPIEL UND MODULE -->
+
+<script type="module">
+
+import * as THREE from
+"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
+
+import { BunkerSystem } from "./bunker.js";
+import { coinFactory } from "./coin.js";
+import { PhysicsSystem } from "./physik.js";
+import { createStaircase } from "./treppe.js";
+import { CoinPickupSystem } from "./heben.js";
+import { CoinCountingMachine } from "./maschine.js";
+import { BunkerLighting } from "./Licht.js";
+
+// ======================================================
+// KONFIGURATION
+// ======================================================
+
+const CONFIG = {
+    floors: 7,
+    floorHeight: 8,
+    bunkerSize: 24,
+
+    // Für den ersten Performance-Test.
+    // Später können wir die Münzmenge erhöhen.
+    coinsPerFloor: 100,
+
+    coinRadius: 0.188,
+    coinThickness: 0.035,
+
+    inventorySlots: 15,
+    stackLimit: 9999,
+
+    playerSpeed: 4.5,
+    playerHeight: 1.7,
+
+    machine: {
+        x: -8,
+        y: 0,
+        z: -5
+    },
+
+    stairs: {
+        x: 8.5,
+        z: -7
+    }
+};
+
+// ======================================================
+// HTML
+// ======================================================
+
+const $ = id => document.getElementById(id);
+
+const startScreen = $("startScreen");
+const startButton = $("startButton");
+const loadingText = $("loading");
+
+const moneyElement = $("money");
+const heldElement = $("held");
+
+const progressText = $("progressText");
+const progressFill = $("progressFill");
+
+const inventoryElement = $("inventory");
+const interactionElement = $("interaction");
+const messageElement = $("message");
+
+// ======================================================
+// THREE.JS
+// ======================================================
+
+const scene = new THREE.Scene();
+
+scene.background = new THREE.Color(0x17191b);
+scene.fog = new THREE.FogExp2(0x17191b, 0.003);
+
+const camera = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    250
+);
+
+camera.position.set(0, CONFIG.playerHeight, 8);
+camera.rotation.order = "YXZ";
+
+const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: "high-performance"
+});
+
+renderer.setSize(
+    window.innerWidth,
+    window.innerHeight
+);
+
+renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, 1.5)
+);
+
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+renderer.shadowMap.enabled = false;
+
+renderer.domElement.style.position = "fixed";
+renderer.domElement.style.inset = "0";
+renderer.domElement.style.zIndex = "0";
+
+document.body.appendChild(renderer.domElement);
+
+// ======================================================
+// STATUS
+// ======================================================
+
+let ready = false;
+let gameStarted = false;
+let locked = false;
+
+let currentFloor = 0;
+let money = 0;
+
+let yaw = 0;
+let pitch = 0;
+
+const keys = {};
+const clock = new THREE.Clock();
+
+let messageTimeout;
+
+let physics;
+let bunker;
+let staircase;
+let lighting;
+let pickupSystem;
+let machine;
+
+const floorCoinMeshes = [];
+
+// ======================================================
+// NACHRICHTEN
+// ======================================================
+
+function showMessage(text) {
+
+    messageElement.textContent = text;
+    messageElement.style.opacity = "1";
+
+    clearTimeout(messageTimeout);
+
+    messageTimeout = setTimeout(() => {
+        messageElement.style.opacity = "0";
+    }, 2200);
+}
+
+// ======================================================
+// INVENTAR
+// ======================================================
+
+function getInventoryCount() {
+    return pickupSystem?.getInventoryCount() ?? 0;
+}
+
+function updateInventory() {
+
+    const inventory = pickupSystem
+        ? pickupSystem.getInventory()
+        : [];
+
+    const count = inventory.length;
+
+    heldElement.textContent =
+        count.toLocaleString("de-DE");
+
+    inventoryElement.innerHTML = "";
+
+    for (let i = 0; i < CONFIG.inventorySlots; i++) {
+
+        const start = i * CONFIG.stackLimit;
+
+        const amount = Math.max(
+            0,
+            Math.min(
+                CONFIG.stackLimit,
+                count - start
+            )
+        );
+
+        const slot = document.createElement("div");
+
+        slot.className =
+            "slot" + (i === 0 ? " active" : "");
+
+        slot.innerHTML = `
+            <span class="slot-number">${i + 1}</span>
+            <span>●</span>
+            <span class="slot-count">
+                ${amount > 0
+                    ? amount.toLocaleString("de-DE")
+                    : ""}
+            </span>
+        `;
+
+        inventoryElement.appendChild(slot);
+    }
+}
+
+// ======================================================
+// GELD
+// ======================================================
+
+function updateMoney() {
+
+    moneyElement.textContent =
+        money.toLocaleString("de-DE");
+
+    progressText.textContent =
+        `${money.toLocaleString("de-DE")} / 1.000.000`;
+
+    progressFill.style.width =
+        Math.min(100, money / 1000000 * 100) + "%";
+}
+
+// ======================================================
+// PHYSIK
+// ======================================================
+
+async function initializePhysics() {
+
+    physics = new PhysicsSystem({
+        gravity: -9.81,
+        maxBodies: 5000
+    });
+
+    await physics.init();
+}
+
+// ======================================================
+// BUNKER
+// ======================================================
+
+function createBunker() {
+
+    bunker = new BunkerSystem(
+        scene,
+        physics,
+        {
+            floorCount: CONFIG.floors,
+            floorHeight: CONFIG.floorHeight,
+
+            width: CONFIG.bunkerSize,
+            depth: CONFIG.bunkerSize,
+
+            createPhysics: true,
+
+            createWallDetails: true,
+            createFloorDetails: true,
+            createCeilingDetails: true,
+            createPillarDetails: true
+        }
+    );
+}
+
+// ======================================================
+// TREPPEN
+// ======================================================
+
+function createStairs() {
+
+    staircase = createStaircase(
+        scene,
+        {
+            floors: CONFIG.floors,
+            floorHeight: CONFIG.floorHeight,
+
+            startX: CONFIG.stairs.x,
+            startZ: CONFIG.stairs.z,
+
+            width: 2.2,
+            runLength: 14,
+
+            physics: physics,
+            createPhysics: false
+        }
+    );
+}
+
+// ======================================================
+// BELEUCHTUNG
+// ======================================================
+
+function createLighting() {
+
+    lighting = new BunkerLighting(
+        scene,
+        {
+            floors: CONFIG.floors,
+            floorHeight: CONFIG.floorHeight,
+            floorSize: CONFIG.bunkerSize,
+
+            color: 0xffd39a,
+            intensity: 2.2,
+
+            enableFlicker: true
+        }
+    );
+
+    const ambient = new THREE.HemisphereLight(
+        0xb7c7d8,
+        0x292018,
+        0.65
+    );
+
+    scene.add(ambient);
+}
+
+// ======================================================
+// MÜNZEN
+// ======================================================
+
+function createCoinFloors() {
+
+    const rotation = new THREE.Quaternion()
+        .setFromEuler(
+            new THREE.Euler(-Math.PI / 2, 0, 0)
+        );
+
+    for (
+        let floor = 0;
+        floor < CONFIG.floors;
+        floor++
+    ) {
+
+        const count = CONFIG.coinsPerFloor;
+
+        const mesh = coinFactory.createInstancedMesh(
+            count,
+            {
+                name: `Coins_Etage_${floor + 1}`
+            }
+        );
+
+        mesh.visible = floor === currentFloor;
+
+        for (let i = 0; i < count; i++) {
+
+            let x;
+            let z;
+
+            do {
+                x = THREE.MathUtils.randFloat(-10, 10);
+                z = THREE.MathUtils.randFloat(-10, 10);
+
+            } while (
+                Math.hypot(
+                    x - CONFIG.machine.x,
+                    z - CONFIG.machine.z
+                ) < 2.5
+                ||
+                Math.hypot(
+                    x - CONFIG.stairs.x,
+                    z - CONFIG.stairs.z
+                ) < 1.5
+            );
+
+            const position = {
+                x,
+                y: floor * CONFIG.floorHeight + 0.12,
+                z
+            };
+
+            coinFactory.updateInstancedMesh(
+                mesh,
+                i,
+                position,
+                rotation,
+                1
+            );
+        }
+
+        coinFactory.commitInstancedMesh(mesh);
+
+        scene.add(mesh);
+
+        pickupSystem.registerInstancedMesh(
+            mesh,
+            {
+                valuePerCoin: 1,
+                radius: CONFIG.coinRadius,
+                thickness: CONFIG.coinThickness
+            }
+        );
+
+        floorCoinMeshes.push(mesh);
+    }
+}
+
+// ======================================================
+// MÜNZZÄHLMASCHINE
+// ======================================================
+
+function createMachine() {
+
+    machine = new CoinCountingMachine(
+        scene,
+        physics,
+        {
+            position: CONFIG.machine,
+
+            scale: 1,
+
+            maxQueuedCoins: 5000,
+            maxActiveCoins: 100
+        }
+    );
+}
+
+// ======================================================
+// AUFHEBESYSTEM
+// ======================================================
+
+function createPickupSystem() {
+
+    pickupSystem = new CoinPickupSystem(
+        scene,
+        camera,
+        physics,
+        {
+            maxDistance: 3.5,
+
+            dropDistance: 1.1,
+            dropHeight: -0.35,
+
+            coinRadius: CONFIG.coinRadius,
+            coinThickness: CONFIG.coinThickness,
+
+            onInventoryChange: () => {
+                updateInventory();
+            },
+
+            onPickup: () => {
+                updateInventory();
+            },
+
+            onDrop: () => {
+                updateInventory();
+            }
+        }
+    );
+}
+
+// ======================================================
+// ETAGENSICHTBARKEIT
+// ======================================================
+
+function updateFloorVisibility() {
+
+    for (let i = 0; i < floorCoinMeshes.length; i++) {
+        floorCoinMeshes[i].visible = i === currentFloor;
+    }
+
+    if (bunker?.setFloorVisible) {
+
+        for (let i = 0; i < CONFIG.floors; i++) {
+            bunker.setFloorVisible(
+                i,
+                i === currentFloor
+            );
+        }
+    }
+
+    if (lighting?.setFloorVisible) {
+
+        for (let i = 0; i < CONFIG.floors; i++) {
+            lighting.setFloorVisible(
+                i,
+                i === currentFloor
+            );
+        }
+    }
+}
+
+// ======================================================
+// SPIELINITIALISIERUNG
+// ======================================================
+
+async function initializeGame() {
+
+    await initializePhysics();
+
+    createBunker();
+    createStairs();
+    createLighting();
+
+    createPickupSystem();
+    createMachine();
+
+    createCoinFloors();
+
+    updateFloorVisibility();
+
+    updateInventory();
+    updateMoney();
+
+    camera.position.set(
+        0,
+        CONFIG.playerHeight,
+        8
+    );
+
+    camera.updateMatrixWorld(true);
+
+    console.log("ONE MILLION COINS: Alle Module geladen.");
+
+    ready = true;
+
+    startButton.disabled = false;
+    startButton.textContent = "SPIEL STARTEN";
+
+    loadingText.textContent = "Alle Systeme bereit!";
+}
+
+// ======================================================
+// SPIELER
+// ======================================================
+
+function updatePlayer(delta) {
+
+    const forward = new THREE.Vector3(
+        -Math.sin(yaw),
+        0,
+        -Math.cos(yaw)
+    );
+
+    const right = new THREE.Vector3(
+        Math.cos(yaw),
+        0,
+        -Math.sin(yaw)
+    );
+
+    const movement = new THREE.Vector3();
+
+    if (keys.KeyW) movement.add(forward);
+    if (keys.KeyS) movement.sub(forward);
+
+    if (keys.KeyD) movement.add(right);
+    if (keys.KeyA) movement.sub(right);
+
+    if (movement.lengthSq() > 0) {
+
+        movement.normalize();
+
+        camera.position.addScaledVector(
+            movement,
+            CONFIG.playerSpeed * delta
+        );
+    }
+
+    camera.position.x = THREE.MathUtils.clamp(
+        camera.position.x,
+        -11,
+        11
+    );
+
+    camera.position.z = THREE.MathUtils.clamp(
+        camera.position.z,
+        -11,
+        11
+    );
+
+    camera.position.y =
+        currentFloor * CONFIG.floorHeight +
+        CONFIG.playerHeight;
+}
+
+// ======================================================
+// MAUSSTEUERUNG
+// ======================================================
+
+document.addEventListener("pointerlockchange", () => {
+
+    locked =
+        document.pointerLockElement === renderer.domElement;
+});
+
+document.addEventListener("mousemove", event => {
+
+    if (!locked || !gameStarted) return;
+
+    yaw -= event.movementX * 0.002;
+    pitch -= event.movementY * 0.002;
+
+    pitch = THREE.MathUtils.clamp(
+        pitch,
+        -1.5,
+        1.5
+    );
+
+    camera.rotation.set(
+        pitch,
+        yaw,
+        0,
+        "YXZ"
+    );
+});
+
+// ======================================================
+// TASTEN
+// ======================================================
+
+document.addEventListener("keydown", event => {
+
+    keys[event.code] = true;
+
+    if (!gameStarted || !ready || event.repeat) return;
+
+    if (event.code === "KeyQ") {
+
+        const success =
+            pickupSystem.handleKeyDown(event);
+
+        if (success) {
+            updateInventory();
+            showMessage("Münze abgelegt");
+        }
+    }
+
+    if (event.code === "KeyE") {
+        interact();
+    }
+
+    if (event.code === "KeyF") {
+        changeFloor();
+    }
+});
+
+document.addEventListener("keyup", event => {
+    keys[event.code] = false;
+});
+
+// ======================================================
+// MÜNZEN AUFHEBEN
+// ======================================================
+
+renderer.domElement.addEventListener("mousedown", event => {
+
+    if (!gameStarted || !locked) return;
+    if (event.button !== 0) return;
+
+    const maxInventory =
+        CONFIG.inventorySlots * CONFIG.stackLimit;
+
+    if (getInventoryCount() >= maxInventory) {
+        showMessage("Inventar ist voll!");
+        return;
+    }
+
+    const success =
+        pickupSystem.handlePointerDown(event);
+
+    if (success) {
+        updateInventory();
+        showMessage("+1 Münze");
+    }
+});
+
+// ======================================================
+// MASCHINE
+// ======================================================
+
+function isNearMachine() {
+
+    if (currentFloor !== 0) return false;
+
+    const dx =
+        camera.position.x - CONFIG.machine.x;
+
+    const dz =
+        camera.position.z - CONFIG.machine.z;
+
+    return Math.hypot(dx, dz) < 4;
+}
+
+function depositCoins() {
+
+    const amount = getInventoryCount();
+
+    if (amount <= 0) {
+        showMessage("Du hast keine Münzen!");
+        return;
+    }
+
+    const accepted = machine.addCoins(amount, 1);
+
+    if (accepted <= 0) {
+        showMessage("Die Maschine ist voll!");
+        return;
+    }
+
+    pickupSystem.takeCoinsForMachine(accepted);
+
+    money += accepted;
+
+    updateInventory();
+    updateMoney();
+
+    showMessage(
+        `${accepted.toLocaleString("de-DE")} Münzen eingezahlt!`
+    );
+}
+
+// ======================================================
+// TREPPEN
+// ======================================================
+
+function changeFloor() {
+
+    const dx =
+        camera.position.x - CONFIG.stairs.x;
+
+    const dz =
+        camera.position.z - CONFIG.stairs.z;
+
+    const distance = Math.hypot(dx, dz);
+
+    if (distance > 3) {
+        showMessage("Gehe zum Treppenhaus!");
+        return;
+    }
+
+    currentFloor =
+        (currentFloor + 1) % CONFIG.floors;
+
+    camera.position.set(
+        CONFIG.stairs.x,
+        currentFloor * CONFIG.floorHeight +
+            CONFIG.playerHeight,
+        CONFIG.stairs.z
+    );
+
+    updateFloorVisibility();
+
+    showMessage(
+        `Etage ${currentFloor + 1} von ${CONFIG.floors}`
+    );
+}
+
+// ======================================================
+// INTERAKTION
+// ======================================================
+
+function updateInteraction() {
+
+    if (isNearMachine()) {
+
+        interactionElement.style.display = "block";
+
+        interactionElement.innerHTML =
+            "<b>E</b> – Münzen einzahlen";
+
+        return;
+    }
+
+    const dx =
+        camera.position.x - CONFIG.stairs.x;
+
+    const dz =
+        camera.position.z - CONFIG.stairs.z;
+
+    if (Math.hypot(dx, dz) < 3) {
+
+        interactionElement.style.display = "block";
+
+        interactionElement.innerHTML =
+            "<b>F</b> – Etage wechseln";
+
+        return;
+    }
+
+    if (pickupSystem.targetCoin) {
+
+        interactionElement.style.display = "block";
+
+        interactionElement.innerHTML =
+            "<b>Linksklick</b> – Münze aufheben";
+
+        return;
+    }
+
+    interactionElement.style.display = "none";
+}
+
+// ======================================================
+// GEDROPPTE MÜNZEN MIT PHYSIK SYNCHRONISIEREN
+// ======================================================
+
+function updateDroppedCoins() {
+
+    for (const coin of pickupSystem.coins.values()) {
+
+        if (!coin.physicsCoin?.active || !coin.mesh) {
+            continue;
+        }
+
+        const transform =
+            physics.getTransform(coin.physicsCoin);
+
+        if (!transform) continue;
+
+        coin.mesh.position.set(
+            transform.position.x,
+            transform.position.y,
+            transform.position.z
+        );
+
+        coin.mesh.quaternion.set(
+            transform.rotation.x,
+            transform.rotation.y,
+            transform.rotation.z,
+            transform.rotation.w
+        );
+    }
+}
+
+// ======================================================
+// STARTBUTTON
+// ======================================================
+
+startButton.addEventListener("click", () => {
+
+    if (!ready || gameStarted) return;
+
+    gameStarted = true;
+
+    // Startbildschirm vollständig entfernen.
+    // Der Button kann danach nicht mehr im Weg sein.
+    startScreen.remove();
+
+    renderer.domElement.requestPointerLock();
+});
+
+// ======================================================
+// ANIMATION
+// ======================================================
+
+function animate() {
+
+    requestAnimationFrame(animate);
+
+    const delta = Math.min(
+        clock.getDelta(),
+        0.05
+    );
+
+    if (ready) {
+
+        if (gameStarted) {
+
+            updatePlayer(delta);
+
+            physics.update(delta);
+
+            camera.updateMatrixWorld(true);
+
+            pickupSystem.update(delta);
+
+            updateDroppedCoins();
+
+            updateInteraction();
+        }
+
+        if (gameStarted) {
+            machine.update(delta);
+            lighting.update(clock.elapsedTime);
+        }
+    }
+
+    renderer.render(scene, camera);
+}
+
+// ======================================================
+// FENSTERGRÖSSE
+// ======================================================
+
+window.addEventListener("resize", () => {
+
+    camera.aspect =
+        window.innerWidth / window.innerHeight;
+
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
+});
+
+// ======================================================
+// START
+// ======================================================
+
+async function start() {
+
+    try {
+
+        await initializeGame();
+
+        animate();
+
+    } catch (error) {
+
+        console.error(
+            "ONE MILLION COINS konnte nicht geladen werden:",
+            error
+        );
+
+        loadingText.textContent =
+            "Fehler beim Laden. Bitte Konsole überprüfen.";
+
+        startButton.disabled = true;
+        startButton.textContent = "LADEFEHLER";
+    }
+}
+
+start();
+
+</script>
 
 </body>
 </html>

@@ -1,91 +1,84 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
-
-import { PhysicsSystem } from "./physik.js";
+import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.17.3/rapier.es.js";
 import { CoinFactory } from "./coin.js";
-import { createStaircase } from "./treppe.js";
-import { createPickupSystem } from "./heben.js";
-import { createCoinCountingMachine } from "./maschine.js";
-import { createBunkerLighting } from "./Licht.js";
 
 // ============================================================
-// ONE MILLION COINS – GAME.JS
+// ONE MILLION COINS
+// Collect. Deposit. Upgrade.
 // ============================================================
 
-// KONFIGURATION
+await RAPIER.init();
 
-const FLOOR_COUNT = 7;
-const FLOOR_HEIGHT = 8;
+// ============================================================
+// EINSTELLUNGEN
+// ============================================================
 
-const GRID_SIZE = 55;
-const CELL_SIZE = 0.4;
+const CONFIG = {
+    floors: 7,
+    floorHeight: 8,
 
-const COIN_DIAMETER = 0.376;
-const COIN_THICKNESS = 0.1;
-const COIN_RADIUS = COIN_DIAMETER / 2;
+    gridSize: 55,
+    cellSize: 0.4,
 
-const LOWER_LAYERS = 80;
-const TOP_LAYERS = 4;
+    chunkSize: 5,
+    chunksPerSide: 11,
 
-const CHUNK_SIZE = 5;
-const CHUNKS_PER_SIDE = GRID_SIZE / CHUNK_SIZE;
+    lowerLayers: 80,
+    topLayers: 4,
 
-const TOTAL_COINS =
-    (FLOOR_COUNT - 1) *
-    GRID_SIZE * GRID_SIZE * LOWER_LAYERS +
-    GRID_SIZE * GRID_SIZE * TOP_LAYERS;
+    coinRadius: 0.188,
+    coinThickness: 0.1,
 
-const SLOT_COUNT = 15;
-const STACK_LIMIT = 9999;
-const MAX_INVENTORY = SLOT_COUNT * STACK_LIMIT;
+    inventorySlots: 15,
+    stackLimit: 9999,
 
-const STAIR_X = 8.5;
-const STAIR_START_Z = -7;
-const STAIR_LENGTH = 14;
-const STAIR_STEPS = 32;
+    maxLoadedChunks: 24,
+    maxActiveBodies: 180,
+    maxChunkLoads: 3,
 
-const STAIR_RUN = STAIR_LENGTH / STAIR_STEPS;
-const STAIR_RISE = FLOOR_HEIGHT / STAIR_STEPS;
+    physicsRadius: 6,
 
-const MACHINE_POSITION = {
-    x: -8,
-    y: 0.4,
-    z: -8
+    playerSpeed: 4.5,
+    playerHeight: 1.7,
+
+    machinePosition: {
+        x: -8,
+        y: 0,
+        z: -8
+    }
 };
 
+const TOTAL_COINS =
+    6 * CONFIG.gridSize * CONFIG.gridSize * CONFIG.lowerLayers +
+    CONFIG.gridSize * CONFIG.gridSize * CONFIG.topLayers;
+
 // ============================================================
-// SZENE
+// THREE.JS
 // ============================================================
 
 const scene = new THREE.Scene();
 
-scene.background = new THREE.Color(0x171918);
-scene.fog = new THREE.FogExp2(0x171918, 0.006);
+scene.background = new THREE.Color(0x111619);
+scene.fog = new THREE.FogExp2(0x111619, 0.0045);
 
 const camera = new THREE.PerspectiveCamera(
     75,
-    window.innerWidth / window.innerHeight,
+    innerWidth / innerHeight,
     0.1,
     180
 );
-
-camera.position.set(0, 2.1, -6);
-scene.add(camera);
 
 const renderer = new THREE.WebGLRenderer({
     antialias: true,
     powerPreference: "high-performance"
 });
 
-renderer.setSize(window.innerWidth, window.innerHeight);
-
-renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio, 1.25)
-);
-
-renderer.shadowMap.enabled = false;
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = false;
 
 renderer.domElement.style.position = "fixed";
 renderer.domElement.style.inset = "0";
@@ -94,76 +87,580 @@ renderer.domElement.style.zIndex = "0";
 document.body.appendChild(renderer.domElement);
 
 // ============================================================
-// STARTBILDSCHIRM
+// DESIGN
 // ============================================================
 
-const startScreen = document.getElementById("startScreen");
-const startButton = document.getElementById("startButton");
+const style = document.createElement("style");
 
-if (startScreen) {
-    startScreen.style.position = "fixed";
-    startScreen.style.inset = "0";
-    startScreen.style.zIndex = "1000";
-    startScreen.style.pointerEvents = "auto";
+style.textContent = `
+* {
+    box-sizing: border-box;
 }
 
-if (startButton) {
-    startButton.style.position = "relative";
-    startButton.style.zIndex = "1001";
-    startButton.style.pointerEvents = "auto";
-    startButton.style.cursor = "pointer";
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #101518;
+    font-family: Arial, sans-serif;
+    color: white;
 }
+
+canvas {
+    display: block;
+}
+
+#startScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 22px;
+    background:
+        radial-gradient(ellipse at center, #253033 0%, #101619 70%, #080c0e 100%);
+    backdrop-filter: blur(12px);
+    pointer-events: auto;
+}
+
+#startScreen h1 {
+    margin: 0;
+    font-size: clamp(35px, 7vw, 76px);
+    font-weight: 900;
+    letter-spacing: 5px;
+    text-align: center;
+    color: #f7d477;
+    text-shadow: 0 0 30px #d99a1955;
+}
+
+#startScreen p {
+    color: #b8c2c4;
+    letter-spacing: 4px;
+    font-size: 13px;
+    text-align: center;
+}
+
+#startButton {
+    min-width: 230px;
+    padding: 19px 35px;
+    border: 1px solid #f6d77e;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #f3d27a, #b77b20);
+    color: #17130a;
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: .2s;
+    box-shadow: 0 8px 35px #d99a1940;
+}
+
+#startButton:hover {
+    transform: translateY(-3px) scale(1.04);
+    filter: brightness(1.15);
+}
+
+#startButton:active {
+    transform: scale(.97);
+}
+
+#hud {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+}
+
+#topHUD {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.hudCard {
+    min-width: 150px;
+    padding: 13px 17px;
+    border: 1px solid #ffffff20;
+    border-radius: 9px;
+    background: #10191ddd;
+    box-shadow: 0 5px 25px #0006;
+    backdrop-filter: blur(10px);
+}
+
+.hudLabel {
+    color: #a9b6b9;
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+}
+
+.hudValue {
+    color: #ffdc82;
+    font-size: 21px;
+    font-weight: bold;
+}
+
+#progressHUD {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: min(280px, 40vw);
+    padding: 13px;
+    border: 1px solid #ffffff20;
+    border-radius: 9px;
+    background: #10191ddd;
+}
+
+#progressText {
+    font-size: 12px;
+    color: #f7d477;
+    margin-bottom: 9px;
+}
+
+#progressTrack {
+    height: 7px;
+    border-radius: 20px;
+    background: #ffffff18;
+    overflow: hidden;
+}
+
+#progressFill {
+    height: 100%;
+    width: 0%;
+    border-radius: 20px;
+    background: linear-gradient(90deg, #b77b20, #ffe49a);
+    transition: width .2s;
+}
+
+#inventory {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+}
+
+.slot {
+    width: 54px;
+    height: 59px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border: 1px solid #ffffff25;
+    border-radius: 8px;
+    background: #10191de8;
+    box-shadow: 0 5px 20px #0008;
+    transition: .15s;
+}
+
+.slot.active {
+    border: 2px solid #f5d178;
+    background: #59451edb;
+    transform: translateY(-7px);
+    box-shadow: 0 0 20px #f5d17844;
+}
+
+.slotNumber {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 10px;
+    color: #aeb8bc;
+}
+
+.slotCoin {
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 25%, #fff1a8, #d99a19 65%, #81500b);
+    box-shadow: 0 0 9px #f7c94c55;
+}
+
+.slotCount {
+    color: #f5d178;
+    font-size: 10px;
+    margin-top: 4px;
+}
+
+#message {
+    position: absolute;
+    top: 22%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 23px;
+    border: 1px solid #d9a944;
+    border-radius: 8px;
+    background: #11191ded;
+    color: #ffe4a0;
+    font-size: 14px;
+    letter-spacing: 1px;
+    opacity: 0;
+    transition: opacity .2s;
+}
+
+#crosshair {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    transform: translate(-50%, -50%);
+    border: 1px solid #ffe4a0;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #ffcf70;
+    pointer-events: none;
+    display: none;
+}
+
+#controlsHint {
+    position: absolute;
+    bottom: 105px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #ffffff9c;
+    font-size: 11px;
+    text-shadow: 0 2px 5px black;
+    white-space: nowrap;
+}
+
+#machineHint {
+    position: absolute;
+    left: 50%;
+    bottom: 145px;
+    transform: translateX(-50%);
+    color: #ffdc82;
+    font-size: 13px;
+    text-shadow: 0 2px 6px black;
+}
+
+#vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 48%,
+        #00000066 100%
+    );
+}
+
+@media(max-width: 650px) {
+    #topHUD {
+        top: 10px;
+        left: 10px;
+        gap: 5px;
+    }
+
+    .hudCard {
+        min-width: 110px;
+        padding: 9px;
+    }
+
+    .hudValue {
+        font-size: 16px;
+    }
+
+    .slot {
+        width: 39px;
+        height: 48px;
+    }
+
+    #inventory {
+        gap: 3px;
+        bottom: 12px;
+    }
+
+    #progressHUD {
+        top: 95px;
+        right: 10px;
+    }
+}
+`;
+
+document.head.appendChild(style);
+
+// ============================================================
+// UI ERSTELLEN ODER VORHANDENE ELEMENTE VERWENDEN
+// ============================================================
+
+function getOrCreate(id, tag = "div", parent = document.body) {
+    let element = document.getElementById(id);
+
+    if (!element) {
+        element = document.createElement(tag);
+        element.id = id;
+        parent.appendChild(element);
+    }
+
+    return element;
+}
+
+const startScreen = getOrCreate("startScreen");
+let startButton = document.getElementById("startButton");
+
+if (!startButton) {
+    startScreen.innerHTML = `
+        <h1>ONE MILLION COINS</h1>
+        <p>COLLECT. DEPOSIT. UPGRADE.</p>
+        <button id="startButton">SPIEL STARTEN</button>
+    `;
+
+    startButton = document.getElementById("startButton");
+}
+
+const hud = getOrCreate("hud");
+const topHUD = getOrCreate("topHUD", "div", hud);
+const progressHUD = getOrCreate("progressHUD", "div", hud);
+const inventoryUI = getOrCreate("inventory", "div", hud);
+const messageUI = getOrCreate("message", "div", hud);
+const crosshair = getOrCreate("crosshair", "div", hud);
+const controlsHint = getOrCreate("controlsHint", "div", hud);
+const machineHint = getOrCreate("machineHint", "div", hud);
+
+if (!document.getElementById("money")) {
+    topHUD.innerHTML = `
+        <div class="hudCard">
+            <div class="hudLabel">GESAMTES GELD</div>
+            <div class="hudValue" id="money">0</div>
+        </div>
+        <div class="hudCard">
+            <div class="hudLabel">IM INVENTAR</div>
+            <div class="hudValue" id="held">0</div>
+        </div>
+    `;
+}
+
+if (!document.getElementById("progressText")) {
+    progressHUD.innerHTML = `
+        <div id="progressText">0 / 1.000.000</div>
+        <div id="progressTrack">
+            <div id="progressFill"></div>
+        </div>
+    `;
+}
+
+controlsHint.textContent = "WASD: Bewegen  |  Maus: Umschauen  |  Q: Ablegen  |  E: Einzahlen";
+machineHint.textContent = "MÜNZENZÄHLER: E zum Einzahlen";
+
+document.body.appendChild(
+    Object.assign(document.createElement("div"), {
+        id: "vignette"
+    })
+);
 
 // ============================================================
 // PHYSIK
 // ============================================================
 
-const physics = new PhysicsSystem({
-    maxBodies: 5000,
-    gravity: -9.81,
-    fixedTimeStep: 1 / 60,
-    maxSubSteps: 4
+const world = new RAPIER.World({
+    x: 0,
+    y: -9.81,
+    z: 0
 });
 
-await physics.init();
+world.timestep = 1 / 60;
+
+const eventQueue = new RAPIER.EventQueue(true);
+
+let physicsAccumulator = 0;
 
 // ============================================================
-// MÜNZFABRIK
+// MÜNZENFABRIK
 // ============================================================
 
 const coinFactory = new CoinFactory({
-    radius: COIN_RADIUS,
-    thickness: COIN_THICKNESS,
+    radius: CONFIG.coinRadius,
+    thickness: CONFIG.coinThickness,
     detailLevel: 64
 });
+
+const coinTemplate = coinFactory.create({
+    x: 0,
+    y: 0,
+    z: 0
+});
+
+coinTemplate.updateMatrixWorld(true);
+
+const coinParts = [];
+
+coinTemplate.traverse(object => {
+    if (!object.isMesh) return;
+
+    coinParts.push({
+        geometry: object.geometry,
+        material: object.material,
+        localMatrix: object.matrixWorld.clone()
+    });
+});
+
+if (coinParts.length === 0) {
+    throw new Error(
+        "coin.js: CoinFactory.create() hat keine Meshes zurückgegeben."
+    );
+}
+
+// ============================================================
+// DETAILLIERTE INSTANCED COINS
+// Mehrere Mesh-Teile bilden gemeinsam eine Münze.
+// ============================================================
+
+const matrixTemp = new THREE.Matrix4();
+
+function createDetailedCoinChunk(capacity, chunk) {
+    const group = new THREE.Group();
+
+    group.name = "DetailedCoinChunk";
+    group.userData.chunk = chunk;
+
+    const parts = [];
+
+    for (const part of coinParts) {
+        const mesh = new THREE.InstancedMesh(
+            part.geometry,
+            part.material,
+            capacity
+        );
+
+        mesh.count = capacity;
+        mesh.frustumCulled = false;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        mesh.userData.chunk = chunk;
+
+        group.add(mesh);
+
+        parts.push({
+            mesh,
+            localMatrix: part.localMatrix
+        });
+    }
+
+    group.setMatrixAt = (index, baseMatrix) => {
+        for (const part of parts) {
+            matrixTemp.multiplyMatrices(
+                baseMatrix,
+                part.localMatrix
+            );
+
+            part.mesh.setMatrixAt(index, matrixTemp);
+        }
+    };
+
+    group.instanceMatrix = {};
+
+    Object.defineProperty(group.instanceMatrix, "needsUpdate", {
+        set(value) {
+            if (!value) return;
+
+            for (const part of parts) {
+                part.mesh.instanceMatrix.needsUpdate = true;
+            }
+        }
+    });
+
+    group.computeBoundingSphere = () => {
+        for (const part of parts) {
+            part.mesh.computeBoundingSphere();
+        }
+    };
+
+    group.userData.parts = parts;
+
+    return group;
+}
 
 // ============================================================
 // MATERIALIEN
 // ============================================================
 
 const concrete = new THREE.MeshStandardMaterial({
-    color: 0x555751,
-    roughness: 0.9
+    color: 0x3b4548,
+    roughness: 0.85,
+    metalness: 0.15
 });
 
 const floorMaterial = new THREE.MeshStandardMaterial({
-    color: 0x30332f,
-    roughness: 0.95
+    color: 0x252e32,
+    roughness: 0.82,
+    metalness: 0.3
 });
 
 const steel = new THREE.MeshStandardMaterial({
-    color: 0x454e50,
+    color: 0x65757a,
     metalness: 0.85,
+    roughness: 0.3
+});
+
+const darkSteel = new THREE.MeshStandardMaterial({
+    color: 0x20292d,
+    metalness: 0.8,
     roughness: 0.35
 });
+
+// ============================================================
+// LICHT
+// ============================================================
+
+scene.add(new THREE.HemisphereLight(
+    0xc6d2dc,
+    0x29231b,
+    0.8
+));
+
+const mainLight = new THREE.DirectionalLight(
+    0xffe4b7,
+    1.5
+);
+
+mainLight.position.set(-8, 25, 8);
+scene.add(mainLight);
+
+function addPointLight(x, y, z, intensity = 30, distance = 15) {
+    const light = new THREE.PointLight(
+        0xffc978,
+        intensity,
+        distance
+    );
+
+    light.position.set(x, y, z);
+    scene.add(light);
+
+    return light;
+}
 
 // ============================================================
 // HILFSFUNKTIONEN
 // ============================================================
 
-function createBox(w, h, d, material, x, y, z, parent = scene) {
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function random(min, max) {
+    return min + Math.random() * (max - min);
+}
+
+function createBox(
+    width,
+    height,
+    depth,
+    material,
+    x,
+    y,
+    z,
+    parent = scene
+) {
     const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(w, h, d),
+        new THREE.BoxGeometry(width, height, depth),
         material
     );
 
@@ -176,53 +673,26 @@ function createBox(w, h, d, material, x, y, z, parent = scene) {
     return mesh;
 }
 
-function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-}
+function createFixedCollider(x, y, z, width, height, depth) {
+    const body = world.createRigidBody(
+        RAPIER.RigidBodyDesc.fixed()
+            .setTranslation(x, y, z)
+    );
 
-function random(min, max) {
-    return min + Math.random() * (max - min);
-}
+    world.createCollider(
+        RAPIER.ColliderDesc.cuboid(
+            width / 2,
+            height / 2,
+            depth / 2
+        ),
+        body
+    );
 
-// ============================================================
-// LICHT
-// ============================================================
-
-scene.add(
-    new THREE.HemisphereLight(
-        0xc6d2dc,
-        0x29231b,
-        0.65
-    )
-);
-
-const mainLight = new THREE.DirectionalLight(
-    0xffe4b7,
-    1.1
-);
-
-mainLight.position.set(-8, 20, 5);
-scene.add(mainLight);
-
-const bunkerLighting = createBunkerLighting(scene, {
-    floors: FLOOR_COUNT,
-    floorHeight: FLOOR_HEIGHT,
-    floorSize: 24,
-    lampSpacing: 8
-});
-
-for (const light of bunkerLighting.lights) {
-    if (light.isPointLight) {
-        light.position.y = 15.3 - light.position.y;
-    }
-}
-
-for (const lamp of bunkerLighting.lampObjects) {
-    lamp.position.y = 15.3 - lamp.position.y;
+    return body;
 }
 
 // ============================================================
-// BUNKERWÄNDE
+// BUNKER
 // ============================================================
 
 createBox(1, 65, 25, concrete, -12, -24, 0);
@@ -230,115 +700,77 @@ createBox(1, 65, 25, concrete, 12, -24, 0);
 createBox(24, 65, 1, concrete, 0, -24, -12);
 createBox(24, 65, 1, concrete, 0, -24, 12);
 
-// ============================================================
-// WELTPHYSIK
-// ============================================================
-
-function createWorldPhysics() {
-    physics.createStaticBox(
-        { x: -12, y: -24, z: 0 },
-        { x: 1, y: 65, z: 25 }
-    );
-
-    physics.createStaticBox(
-        { x: 12, y: -24, z: 0 },
-        { x: 1, y: 65, z: 25 }
-    );
-
-    physics.createStaticBox(
-        { x: 0, y: -24, z: -12 },
-        { x: 24, y: 65, z: 1 }
-    );
-
-    physics.createStaticBox(
-        { x: 0, y: -24, z: 12 },
-        { x: 24, y: 65, z: 1 }
-    );
-
-    for (let level = 0; level < FLOOR_COUNT; level++) {
-        const y = -level * FLOOR_HEIGHT - 0.35;
-
-        physics.createStaticBox(
-            { x: -2.75, y, z: 0 },
-            { x: 18.5, y: 0.7, z: 24 }
-        );
-
-        physics.createStaticBox(
-            { x: 11.25, y, z: 0 },
-            { x: 1.5, y: 0.7, z: 24 }
-        );
-    }
-
-    for (let level = 0; level < FLOOR_COUNT - 1; level++) {
-        for (let i = 0; i < STAIR_STEPS; i++) {
-            const topY =
-                level * FLOOR_HEIGHT +
-                (i + 1) * STAIR_RISE;
-
-            const centerY = -topY + 0.055;
-
-            const centerZ =
-                STAIR_START_Z +
-                (i + 0.5) * STAIR_RUN;
-
-            physics.createStaticBox(
-                {
-                    x: STAIR_X,
-                    y: centerY,
-                    z: centerZ
-                },
-                {
-                    x: 2.2,
-                    y: 0.11,
-                    z: STAIR_RUN * 0.96
-                },
-                {
-                    friction: 0.85,
-                    restitution: 0
-                }
-            );
-        }
-    }
-}
-
-createWorldPhysics();
+createFixedCollider(-12, -24, 0, 1, 65, 25);
+createFixedCollider(12, -24, 0, 1, 65, 25);
+createFixedCollider(0, -24, -12, 24, 65, 1);
+createFixedCollider(0, -24, 12, 24, 65, 1);
 
 // ============================================================
 // ETAGEN
 // ============================================================
 
-for (let level = 0; level < FLOOR_COUNT; level++) {
-    const y = -level * FLOOR_HEIGHT;
+for (let level = 0; level < CONFIG.floors; level++) {
+    const y = -level * CONFIG.floorHeight;
 
     createBox(
-        18.5, 0.7, 24,
+        19,
+        0.7,
+        24,
         floorMaterial,
-        -2.75, y - 0.35, 0
+        -2.5,
+        y - 0.35,
+        0
     );
 
     createBox(
-        1.5, 0.7, 24,
+        1.5,
+        0.7,
+        24,
         floorMaterial,
-        11.25, y - 0.35, 0
+        11.25,
+        y - 0.35,
+        0
     );
+
+    createFixedCollider(-2.5, y - 0.35, 0, 19, 0.7, 24);
+    createFixedCollider(11.25, y - 0.35, 0, 1.5, 0.7, 24);
+
+    // Wandverstärkungen
 
     for (let z = -9; z <= 9; z += 3) {
-        createBox(
-            0.16, 7.5, 0.16,
-            steel,
-            -11.3, y + 3.5, z
-        );
-
-        createBox(
-            0.16, 7.5, 0.16,
-            steel,
-            11.3, y + 3.5, z
-        );
+        createBox(0.16, 7.5, 0.16, steel, -11.3, y + 3.5, z);
+        createBox(0.16, 7.5, 0.16, steel, 11.3, y + 3.5, z);
     }
+
+    // Beleuchtung
+
+    for (const side of [-1, 1]) {
+        for (const z of [-8, 0, 8]) {
+            createBox(
+                0.25,
+                0.65,
+                0.5,
+                steel,
+                side * 11.3,
+                y + 3.5,
+                z
+            );
+
+            addPointLight(
+                side * 10.6,
+                y + 3.5,
+                z,
+                38,
+                13
+            );
+        }
+    }
+
+    // Rohre
 
     for (const x of [-10.7, 10.7]) {
         const pipe = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.2, 0.2, 7, 12),
+            new THREE.CylinderGeometry(0.2, 0.2, 7, 16),
             steel
         );
 
@@ -348,120 +780,98 @@ for (let level = 0; level < FLOOR_COUNT; level++) {
 }
 
 // ============================================================
-// TREPPE
+// TREPPEN
 // ============================================================
 
-const staircase = createStaircase(scene, {
-    floors: FLOOR_COUNT,
-    floorHeight: FLOOR_HEIGHT,
-    stepsPerFloor: STAIR_STEPS,
-    width: 2.2,
-    startX: STAIR_X,
-    startZ: STAIR_START_Z,
-    runLength: STAIR_LENGTH,
-    createPhysics: false
-});
+const STAIR_X = 8.5;
+const STAIR_START_Z = -7;
+const STAIR_LENGTH = 14;
+const STAIR_STEPS = 32;
 
-staircase.group.scale.y = -1;
+const stairRun = STAIR_LENGTH / STAIR_STEPS;
+const stairRise = CONFIG.floorHeight / STAIR_STEPS;
 
-// ============================================================
-// MÜNZSTAPEL UND CHUNKS
-// ============================================================
+const rampAngle = Math.atan(
+    CONFIG.floorHeight / STAIR_LENGTH
+);
 
-const dummy = new THREE.Object3D();
+for (let level = 0; level < CONFIG.floors - 1; level++) {
+    const topY = -level * CONFIG.floorHeight;
 
-const faceUpQuaternion = new THREE.Quaternion()
-    .setFromAxisAngle(
-        new THREE.Vector3(1, 0, 0),
-        -Math.PI / 2
+    const ramp = new THREE.Mesh(
+        new THREE.BoxGeometry(3.5, 0.35, 16),
+        steel
     );
 
-const spinQuaternion = new THREE.Quaternion();
-const spinAxis = new THREE.Vector3(0, 0, 1);
+    ramp.position.set(
+        STAIR_X,
+        topY - 4,
+        0
+    );
 
-const cellCounts = [];
-const cellStarts = [];
-const cellChunkIds = [];
-const coinChunks = [];
+    ramp.rotation.x = rampAngle;
+    scene.add(ramp);
 
-function cellIndex(x, z) {
-    return z * GRID_SIZE + x;
+    for (let i = 0; i < STAIR_STEPS; i++) {
+        const z = STAIR_START_Z + i * stairRun;
+        const y = topY - i * stairRise;
+
+        createBox(
+            3.5,
+            0.16,
+            stairRun,
+            steel,
+            STAIR_X,
+            y - 0.08,
+            z + stairRun / 2
+        );
+    }
+
+    for (const side of [-1, 1]) {
+        const rail = new THREE.Mesh(
+            new THREE.BoxGeometry(0.13, 0.75, 14),
+            steel
+        );
+
+        rail.position.set(
+            STAIR_X + side * 1.85,
+            topY - 4,
+            0
+        );
+
+        rail.rotation.x = rampAngle;
+        scene.add(rail);
+    }
 }
 
-function getCellWorld(ix, iz) {
+// ============================================================
+// MÜNZEN UND CHUNKS
+// ============================================================
+
+const chunks = [];
+const cellCounts = [];
+const cellChunkIds = [];
+
+function cellIndex(x, z) {
+    return z * CONFIG.gridSize + x;
+}
+
+function getCellPosition(ix, iz) {
     return {
-        x: -11 + (ix + 0.5) * CELL_SIZE,
-        z: -11 + (iz + 0.5) * CELL_SIZE
+        x: -11 + (ix + 0.5) * CONFIG.cellSize,
+        z: -11 + (iz + 0.5) * CONFIG.cellSize
     };
 }
 
-for (let level = 0; level < FLOOR_COUNT; level++) {
-    const layers = level === 0 ? TOP_LAYERS : LOWER_LAYERS;
-
-    const counts = new Uint8Array(GRID_SIZE * GRID_SIZE);
-    const starts = new Uint32Array(GRID_SIZE * GRID_SIZE);
-    const chunkIds = new Uint16Array(GRID_SIZE * GRID_SIZE);
-
-    const floorChunks = [];
-    const floorY = -level * FLOOR_HEIGHT;
-
-    counts.fill(layers);
-
-    for (let cz = 0; cz < CHUNKS_PER_SIDE; cz++) {
-        for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
-            const chunkIndex = cz * CHUNKS_PER_SIDE + cx;
-
-            const minCellX = cx * CHUNK_SIZE;
-            const minCellZ = cz * CHUNK_SIZE;
-
-            for (let iz = minCellZ; iz < minCellZ + CHUNK_SIZE; iz++) {
-                for (let ix = minCellX; ix < minCellX + CHUNK_SIZE; ix++) {
-                    chunkIds[cellIndex(ix, iz)] = chunkIndex;
-                }
-            }
-
-            const minX = -11 + cx * CHUNK_SIZE * CELL_SIZE;
-            const minZ = -11 + cz * CHUNK_SIZE * CELL_SIZE;
-
-            const maxX = minX + CHUNK_SIZE * CELL_SIZE;
-            const maxZ = minZ + CHUNK_SIZE * CELL_SIZE;
-
-            floorChunks.push({
-                mesh: null,
-                remaining: CHUNK_SIZE * CHUNK_SIZE * layers,
-                level,
-                chunkIndex,
-                cx,
-                cz,
-                box: new THREE.Box3(
-                    new THREE.Vector3(
-                        minX - 0.2,
-                        floorY - 0.2,
-                        minZ - 0.2
-                    ),
-                    new THREE.Vector3(
-                        maxX + 0.2,
-                        floorY + layers * COIN_THICKNESS + 0.2,
-                        maxZ + 0.2
-                    )
-                )
-            });
-        }
-    }
-
-    cellCounts.push(counts);
-    cellStarts.push(starts);
-    cellChunkIds.push(chunkIds);
-    coinChunks.push(floorChunks);
-}
-
-function worldToCell(x, z) {
-    const ix = Math.floor((x + 11) / CELL_SIZE);
-    const iz = Math.floor((z + 11) / CELL_SIZE);
+function getCell(x, z) {
+    const ix = Math.floor((x + 11) / CONFIG.cellSize);
+    const iz = Math.floor((z + 11) / CONFIG.cellSize);
 
     if (
-        ix < 0 || ix >= GRID_SIZE ||
-        iz < 0 || iz >= GRID_SIZE
+        ix < 0 ||
+        ix >= CONFIG.gridSize ||
+        iz < 0 ||
+        iz >= CONFIG.gridSize
     ) {
         return null;
     }
@@ -473,79 +883,61 @@ function worldToCell(x, z) {
     };
 }
 
-function getChunkForCell(level, cell) {
-    return coinChunks[level][
-        cellChunkIds[level][cell.index]
-    ];
-}
+for (let level = 0; level < CONFIG.floors; level++) {
+    const layers = level === 0
+        ? CONFIG.topLayers
+        : CONFIG.lowerLayers;
 
-// ============================================================
-// CHUNK LADEN
-// ============================================================
-
-function ensureChunkLoaded(chunk) {
-    if (chunk.mesh || chunk.remaining <= 0) return;
-
-    const level = chunk.level;
-    const layers = level === 0 ? TOP_LAYERS : LOWER_LAYERS;
-    const floorY = -level * FLOOR_HEIGHT;
-
-    const capacity = CHUNK_SIZE * CHUNK_SIZE * layers;
-
-    // Muss die detaillierte Geometrie aus coin.js verwenden.
-    const mesh = coinFactory.createInstancedMesh(
-        capacity,
-        {
-            name: `CoinChunk_${level}_${chunk.chunkIndex}`
-        }
+    const counts = new Uint8Array(
+        CONFIG.gridSize * CONFIG.gridSize
     );
 
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
+    counts.fill(layers);
 
-    let localId = 0;
+    const ids = new Uint16Array(
+        CONFIG.gridSize * CONFIG.gridSize
+    );
 
-    const minCellX = chunk.cx * CHUNK_SIZE;
-    const minCellZ = chunk.cz * CHUNK_SIZE;
+    const floorChunks = [];
 
-    for (let iz = minCellZ; iz < minCellZ + CHUNK_SIZE; iz++) {
-        for (let ix = minCellX; ix < minCellX + CHUNK_SIZE; ix++) {
-            const cell = cellIndex(ix, iz);
-            const pos = getCellWorld(ix, iz);
+    for (let cz = 0; cz < CONFIG.chunksPerSide; cz++) {
+        for (let cx = 0; cx < CONFIG.chunksPerSide; cx++) {
+            const id = cz * CONFIG.chunksPerSide + cx;
 
-            cellStarts[level][cell] = localId;
-
-            for (let layer = 0; layer < cellCounts[level][cell]; layer++) {
-                dummy.position.set(
-                    pos.x,
-                    floorY + COIN_THICKNESS * (layer + 0.5),
-                    pos.z
-                );
-
-                spinQuaternion.setFromAxisAngle(
-                    spinAxis,
-                    random(0, Math.PI * 2)
-                );
-
-                dummy.quaternion
-                    .copy(faceUpQuaternion)
-                    .multiply(spinQuaternion);
-
-                dummy.scale.set(1, 1, 1);
-                dummy.updateMatrix();
-
-                mesh.setMatrixAt(localId, dummy.matrix);
-                localId++;
+            for (
+                let iz = cz * CONFIG.chunkSize;
+                iz < (cz + 1) * CONFIG.chunkSize;
+                iz++
+            ) {
+                for (
+                    let ix = cx * CONFIG.chunkSize;
+                    ix < (cx + 1) * CONFIG.chunkSize;
+                    ix++
+                ) {
+                    ids[cellIndex(ix, iz)] = id;
+                }
             }
+
+            floorChunks.push({
+                level,
+                cx,
+                cz,
+                mesh: null,
+                coins: null,
+                lastSeen: 0
+            });
         }
     }
 
-    mesh.count = localId;
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
+    cellCounts.push(counts);
+    cellChunkIds.push(ids);
+    chunks.push(floorChunks);
+}
 
-    scene.add(mesh);
-    chunk.mesh = mesh;
+function getChunk(level, cell) {
+    return chunks[level][
+        cellChunkIds[level][cell.index]
+    ];
 }
 
 // ============================================================
@@ -553,301 +945,560 @@ function ensureChunkLoaded(chunk) {
 // ============================================================
 
 const player = {
-    position: new THREE.Vector3(0, 2.1, -6),
+    position: new THREE.Vector3(0, 1.7, -6),
     velocity: new THREE.Vector3(),
-    speed: 4.5,
-    radius: 0.32,
-    height: 1.7,
+    height: CONFIG.playerHeight,
+    speed: CONFIG.playerSpeed,
     grounded: false
 };
 
 let yaw = 0;
 let pitch = 0;
 let locked = false;
+
 const keys = {};
-
-function isInRampArea(x, z) {
-    return (
-        x > 6.7 && x < 10.3 &&
-        z > -7.5 && z < 7.5
-    );
-}
-
-function getCurrentFloor() {
-    if (isInRampArea(player.position.x, player.position.z)) {
-        const progress = clamp(
-            (player.position.z - STAIR_START_Z) / STAIR_LENGTH,
-            0,
-            1
-        );
-
-        return clamp(
-            Math.round(
-                (1.7 - player.position.y - progress * FLOOR_HEIGHT) /
-                FLOOR_HEIGHT
-            ),
-            0,
-            FLOOR_COUNT - 1
-        );
-    }
-
-    return clamp(
-        Math.round((1.7 - player.position.y) / FLOOR_HEIGHT),
-        0,
-        FLOOR_COUNT - 1
-    );
-}
-
-// ============================================================
-// CHUNK SICHTBARKEIT
-// ============================================================
-
-const coinFrustum = new THREE.Frustum();
-const coinViewProjection = new THREE.Matrix4();
-
-function updateCoinVisibility() {
-    const level = getCurrentFloor();
-    const onStairs = isInRampArea(player.position.x, player.position.z);
-
-    camera.updateMatrixWorld(true);
-
-    coinViewProjection.multiplyMatrices(
-        camera.projectionMatrix,
-        camera.matrixWorldInverse
-    );
-
-    coinFrustum.setFromProjectionMatrix(coinViewProjection);
-
-    for (let floor = 0; floor < FLOOR_COUNT; floor++) {
-        const showFloor =
-            floor === level ||
-            (onStairs && Math.abs(floor - level) === 1);
-
-        for (const chunk of coinChunks[floor]) {
-            if (!showFloor || chunk.remaining <= 0) {
-                if (chunk.mesh) chunk.mesh.visible = false;
-                continue;
-            }
-
-            const inView = coinFrustum.intersectsBox(chunk.box);
-
-            if (inView) {
-                ensureChunkLoaded(chunk);
-                if (chunk.mesh) chunk.mesh.visible = true;
-            } else if (chunk.mesh) {
-                chunk.mesh.visible = false;
-            }
-        }
-    }
-}
 
 // ============================================================
 // INVENTAR
 // ============================================================
 
+const inventory = Array.from(
+    { length: CONFIG.inventorySlots },
+    () => 0
+);
+
 let money = 0;
 let selectedSlot = 0;
 
-const pickup = createPickupSystem(
-    scene,
-    camera,
-    physics,
-    {
-        maxDistance: 4.5,
-        dropDistance: 1.1,
-        dropHeight: -0.35,
-        onInventoryChange: updateHUD
-    }
-);
-
 function getHeldCoins() {
-    return pickup.getInventoryCount();
+    return inventory.reduce((sum, amount) => sum + amount, 0);
 }
 
-function renderInventory() {
-    const ui = document.getElementById("inventory");
-    if (!ui) return;
+function addCoins(amount) {
+    let remaining = amount;
 
-    ui.innerHTML = "";
+    for (let i = 0; i < inventory.length; i++) {
+        const free = CONFIG.stackLimit - inventory[i];
 
-    const total = getHeldCoins();
+        if (free <= 0) continue;
 
-    for (let i = 0; i < SLOT_COUNT; i++) {
-        const amount = clamp(
-            total - i * STACK_LIMIT,
-            0,
-            STACK_LIMIT
+        const added = Math.min(free, remaining);
+
+        inventory[i] += added;
+        remaining -= added;
+
+        if (remaining <= 0) break;
+    }
+
+    updateHUD();
+
+    return amount - remaining;
+}
+
+function removeCoins(amount) {
+    let remaining = amount;
+
+    for (let i = inventory.length - 1; i >= 0; i--) {
+        const removed = Math.min(
+            inventory[i],
+            remaining
         );
 
-        const slot = document.createElement("div");
-        slot.className = "slot" + (i === selectedSlot ? " active" : "");
+        inventory[i] -= removed;
+        remaining -= removed;
 
-        slot.innerHTML = `
-            <span class="slot-number">${i + 1}</span>
-            ${amount > 0 ? "🪙" : ""}
-            <span class="slot-count">${amount || ""}</span>
-        `;
-
-        ui.appendChild(slot);
+        if (remaining <= 0) break;
     }
+
+    updateHUD();
+
+    return amount - remaining;
 }
+
+// ============================================================
+// HUD AKTUALISIEREN
+// ============================================================
 
 function updateHUD() {
     const held = getHeldCoins();
 
     const moneyUI = document.getElementById("money");
     const heldUI = document.getElementById("held");
+
+    if (moneyUI) {
+        moneyUI.textContent = money.toLocaleString("de-DE");
+    }
+
+    if (heldUI) {
+        heldUI.textContent = held.toLocaleString("de-DE");
+    }
+
+    const total = money + held;
+
     const progressText = document.getElementById("progressText");
     const progressFill = document.getElementById("progressFill");
 
-    if (moneyUI) moneyUI.textContent = money.toLocaleString("de-DE");
-    if (heldUI) heldUI.textContent = held.toLocaleString("de-DE");
-
-    const progress = money + held;
-
     if (progressText) {
         progressText.textContent =
-            progress.toLocaleString("de-DE") +
+            total.toLocaleString("de-DE") +
             " / " +
             TOTAL_COINS.toLocaleString("de-DE");
     }
 
     if (progressFill) {
         progressFill.style.width =
-            clamp(progress / TOTAL_COINS * 100, 0, 100) + "%";
+            clamp(total / TOTAL_COINS * 100, 0, 100) + "%";
     }
 
-    renderInventory();
+    inventoryUI.innerHTML = "";
+
+    inventory.forEach((amount, index) => {
+        const slot = document.createElement("div");
+
+        slot.className =
+            "slot" + (index === selectedSlot ? " active" : "");
+
+        slot.innerHTML = `
+            <span class="slotNumber">${index + 1}</span>
+            ${amount > 0 ? '<div class="slotCoin"></div>' : ""}
+            <span class="slotCount">${amount || ""}</span>
+        `;
+
+        inventoryUI.appendChild(slot);
+    });
 }
 
 // ============================================================
-// MÜNZEN AUS STAPEL AUFHEBEN
+// CHUNK-DATEN
 // ============================================================
 
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2(0, 0);
+function createChunkData(chunk) {
+    const coins = [];
+    const floorY = -chunk.level * CONFIG.floorHeight;
 
-const horizontalPlane = new THREE.Plane(
-    new THREE.Vector3(0, 1, 0),
-    0
-);
+    for (
+        let iz = chunk.cz * CONFIG.chunkSize;
+        iz < (chunk.cz + 1) * CONFIG.chunkSize;
+        iz++
+    ) {
+        for (
+            let ix = chunk.cx * CONFIG.chunkSize;
+            ix < (chunk.cx + 1) * CONFIG.chunkSize;
+            ix++
+        ) {
+            const cell = cellIndex(ix, iz);
+            const position = getCellPosition(ix, iz);
 
-const hitPoint = new THREE.Vector3();
-const cameraForward = new THREE.Vector3();
+            for (
+                let layer = 0;
+                layer < cellCounts[chunk.level][cell];
+                layer++
+            ) {
+                coins.push({
+                    localId: coins.length,
 
-function findPileCoin() {
-    raycaster.setFromCamera(mouse, camera);
-    camera.getWorldDirection(cameraForward);
+                    x: position.x,
+                    y: floorY + CONFIG.coinThickness * (layer + 0.5),
+                    z: position.z,
 
-    let best = null;
-    let bestDistance = Infinity;
+                    rotation: null,
+                    velocity: null,
+                    angularVelocity: null,
 
-    for (let level = 0; level < FLOOR_COUNT; level++) {
-        const floorVisible = coinChunks[level].some(
-            chunk => chunk.mesh && chunk.mesh.visible
-        );
-
-        if (!floorVisible) continue;
-
-        const maxLayers = level === 0 ? TOP_LAYERS : LOWER_LAYERS;
-        const floorY = -level * FLOOR_HEIGHT;
-
-        for (let layer = maxLayers - 1; layer >= 0; layer--) {
-            const planeY = floorY + COIN_THICKNESS * (layer + 1);
-            horizontalPlane.constant = -planeY;
-
-            if (!raycaster.ray.intersectPlane(horizontalPlane, hitPoint)) {
-                continue;
+                    body: null,
+                    collected: false,
+                    chunk
+                });
             }
-
-            const cell = worldToCell(hitPoint.x, hitPoint.z);
-            if (!cell) continue;
-
-            if (cellCounts[level][cell.index] !== layer + 1) continue;
-
-            const chunk = getChunkForCell(level, cell);
-
-            if (!chunk.mesh || !chunk.mesh.visible) continue;
-
-            const center = getCellWorld(cell.ix, cell.iz);
-
-            const targetPosition = new THREE.Vector3(
-                center.x,
-                planeY,
-                center.z
-            );
-
-            const distance = camera.position.distanceTo(targetPosition);
-
-            const direction = new THREE.Vector3()
-                .subVectors(targetPosition, camera.position);
-
-            if (direction.dot(cameraForward) <= 0) continue;
-            if (distance > 4.5 || distance >= bestDistance) continue;
-
-            bestDistance = distance;
-
-            best = {
-                level,
-                cell,
-                point: targetPosition.clone(),
-                layer
-            };
         }
     }
 
-    return best;
+    return coins;
 }
 
 // ============================================================
-// INVENTARMÜNZE ERSTELLEN
+// MÜNZEN-MATRIX
 // ============================================================
 
-function createInventoryCoin(position) {
-    // Inventarmünzen benötigen keinen aktiven Physikkörper.
-    // Erst beim Fallenlassen erzeugt heben.js die Physik.
+const tempObject = new THREE.Object3D();
 
-    const mesh = coinFactory.create(
-        position,
-        { value: 1 }
+function setCoinMatrix(mesh, coin) {
+    if (coin.collected) {
+        tempObject.position.set(0, -1000, 0);
+        tempObject.scale.set(0, 0, 0);
+        tempObject.quaternion.identity();
+    } else {
+        tempObject.position.set(
+            coin.x,
+            coin.y,
+            coin.z
+        );
+
+        tempObject.scale.set(1, 1, 1);
+
+        if (coin.rotation) {
+            tempObject.quaternion.set(
+                coin.rotation.x,
+                coin.rotation.y,
+                coin.rotation.z,
+                coin.rotation.w
+            );
+        } else {
+            tempObject.quaternion.identity();
+        }
+    }
+
+    tempObject.updateMatrix();
+
+    mesh.setMatrixAt(
+        coin.localId,
+        tempObject.matrix
+    );
+}
+
+// ============================================================
+// CHUNK LADEN
+// ============================================================
+
+function loadChunk(chunk) {
+    if (chunk.mesh) return;
+
+    if (!chunk.coins) {
+        chunk.coins = createChunkData(chunk);
+    }
+
+    const mesh = createDetailedCoinChunk(
+        chunk.coins.length,
+        chunk
     );
 
-    if (!mesh) {
-        showMessage("Münze konnte nicht erstellt werden!");
-        return false;
+    for (const coin of chunk.coins) {
+        setCoinMatrix(mesh, coin);
     }
+
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
 
     scene.add(mesh);
 
-    const data = pickup.registerCoin(mesh, null, 1);
+    chunk.mesh = mesh;
+}
 
-    if (!data) {
-        scene.remove(mesh);
+// ============================================================
+// PHYSIK-MÜNZEN
+// ============================================================
+
+const activeCoins = new Set();
+
+function createPhysicsCoin(coin) {
+    if (activeCoins.size >= CONFIG.maxActiveBodies) {
         return false;
     }
 
-    scene.remove(mesh);
+    if (coin.body || coin.collected) return false;
 
-    data.available = false;
-    data.collected = true;
-    data.physicsCoin = null;
+    const body = world.createRigidBody(
+        RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(
+                coin.x,
+                coin.y,
+                coin.z
+            )
+            .setLinearDamping(0.25)
+            .setAngularDamping(0.35)
+            .setCanSleep(true)
+    );
 
-    pickup.inventory.push(data);
-    pickup.totalCollected++;
+    world.createCollider(
+        RAPIER.ColliderDesc.cylinder(
+            CONFIG.coinThickness / 2,
+            CONFIG.coinRadius
+        )
+            .setDensity(7)
+            .setFriction(0.9)
+            .setRestitution(0.12),
+        body
+    );
 
-    pickup.updateInventory();
+    if (coin.rotation) {
+        body.setRotation(coin.rotation, true);
+    }
+
+    if (coin.velocity) {
+        body.setLinvel(coin.velocity, true);
+    }
+
+    if (coin.angularVelocity) {
+        body.setAngvel(coin.angularVelocity, true);
+    }
+
+    coin.body = body;
+
+    activeCoins.add(coin);
 
     return true;
 }
 
+function saveCoinPhysics(coin) {
+    if (!coin.body) return;
+
+    const body = coin.body;
+
+    const position = body.translation();
+    const rotation = body.rotation();
+    const velocity = body.linvel();
+    const angularVelocity = body.angvel();
+
+    coin.x = position.x;
+    coin.y = position.y;
+    coin.z = position.z;
+
+    coin.rotation = {
+        x: rotation.x,
+        y: rotation.y,
+        z: rotation.z,
+        w: rotation.w
+    };
+
+    coin.velocity = {
+        x: velocity.x,
+        y: velocity.y,
+        z: velocity.z
+    };
+
+    coin.angularVelocity = {
+        x: angularVelocity.x,
+        y: angularVelocity.y,
+        z: angularVelocity.z
+    };
+
+    world.removeRigidBody(body);
+
+    activeCoins.delete(coin);
+
+    coin.body = null;
+}
+
+function freezeChunk(chunk) {
+    if (!chunk.coins) return;
+
+    for (const coin of chunk.coins) {
+        if (coin.body) {
+            saveCoinPhysics(coin);
+        }
+    }
+}
+
 // ============================================================
-// SAMMELEFFEKT
+// PHYSIK AKTIVIEREN
+// ============================================================
+
+function activateNearbyCoins() {
+    if (activeCoins.size >= CONFIG.maxActiveBodies) return;
+
+    const radiusSq =
+        CONFIG.physicsRadius * CONFIG.physicsRadius;
+
+    for (const floorChunks of chunks) {
+        for (const chunk of floorChunks) {
+            if (!chunk.mesh || !chunk.mesh.visible) continue;
+            if (!chunk.coins) continue;
+
+            for (const coin of chunk.coins) {
+                if (activeCoins.size >= CONFIG.maxActiveBodies) {
+                    return;
+                }
+
+                if (coin.collected || coin.body) continue;
+
+                const dx = coin.x - player.position.x;
+                const dy = coin.y - player.position.y;
+                const dz = coin.z - player.position.z;
+
+                if (
+                    dx * dx + dy * dy + dz * dz >
+                    radiusSq
+                ) {
+                    continue;
+                }
+
+                if (Math.abs(dy) > 2.8) continue;
+
+                createPhysicsCoin(coin);
+            }
+        }
+    }
+}
+
+// ============================================================
+// PHYSIK UPDATE
+// ============================================================
+
+function updateCoinPhysics() {
+    world.step(eventQueue);
+
+    for (const coin of activeCoins) {
+        if (!coin.body) continue;
+
+        const position = coin.body.translation();
+        const rotation = coin.body.rotation();
+
+        coin.x = position.x;
+        coin.y = position.y;
+        coin.z = position.z;
+
+        coin.rotation = {
+            x: rotation.x,
+            y: rotation.y,
+            z: rotation.z,
+            w: rotation.w
+        };
+
+        if (coin.chunk && coin.chunk.mesh) {
+            setCoinMatrix(
+                coin.chunk.mesh,
+                coin
+            );
+
+            coin.chunk.mesh.instanceMatrix.needsUpdate = true;
+        }
+    }
+}
+
+// ============================================================
+// SICHTFELD UND CHUNK-STREAMING
+// ============================================================
+
+const frustum = new THREE.Frustum();
+const viewProjection = new THREE.Matrix4();
+
+function getCurrentFloor() {
+    return clamp(
+        Math.round(
+            (1.7 - player.position.y) / CONFIG.floorHeight
+        ),
+        0,
+        CONFIG.floors - 1
+    );
+}
+
+function isInRampArea(x, z) {
+    return (
+        x > 6.5 &&
+        x < 10.5 &&
+        z > -7.5 &&
+        z < 7.5
+    );
+}
+
+function updateVisibility() {
+    camera.updateMatrixWorld(true);
+
+    viewProjection.multiplyMatrices(
+        camera.projectionMatrix,
+        camera.matrixWorldInverse
+    );
+
+    frustum.setFromProjectionMatrix(viewProjection);
+
+    const currentFloor = getCurrentFloor();
+
+    let loads = 0;
+
+    for (let floor = 0; floor < CONFIG.floors; floor++) {
+        for (const chunk of chunks[floor]) {
+            const minX =
+                -11 + chunk.cx * CONFIG.chunkSize * CONFIG.cellSize;
+
+            const minZ =
+                -11 + chunk.cz * CONFIG.chunkSize * CONFIG.cellSize;
+
+            const bounds = new THREE.Box3(
+                new THREE.Vector3(
+                    minX,
+                    -floor * CONFIG.floorHeight,
+                    minZ
+                ),
+                new THREE.Vector3(
+                    minX + CONFIG.chunkSize * CONFIG.cellSize,
+                    -floor * CONFIG.floorHeight + CONFIG.floorHeight,
+                    minZ + CONFIG.chunkSize * CONFIG.cellSize
+                )
+            );
+
+            const visibleFloor =
+                floor === currentFloor ||
+                (
+                    isInRampArea(
+                        player.position.x,
+                        player.position.z
+                    ) &&
+                    Math.abs(floor - currentFloor) <= 1
+                );
+
+            const visible =
+                visibleFloor &&
+                frustum.intersectsBox(bounds);
+
+            if (!visible) {
+                if (chunk.mesh) {
+                    chunk.mesh.visible = false;
+                    freezeChunk(chunk);
+                }
+
+                continue;
+            }
+
+            chunk.lastSeen = performance.now();
+
+            if (!chunk.mesh && loads < CONFIG.maxChunkLoads) {
+                loadChunk(chunk);
+                loads++;
+            }
+
+            if (chunk.mesh) {
+                chunk.mesh.visible = true;
+            }
+        }
+    }
+
+    const loaded = [];
+
+    for (const floorChunks of chunks) {
+        for (const chunk of floorChunks) {
+            if (chunk.mesh) {
+                loaded.push(chunk);
+            }
+        }
+    }
+
+    if (loaded.length > CONFIG.maxLoadedChunks) {
+        loaded
+            .filter(chunk => !chunk.mesh.visible)
+            .sort((a, b) => a.lastSeen - b.lastSeen)
+            .slice(
+                0,
+                loaded.length - CONFIG.maxLoadedChunks
+            )
+            .forEach(chunk => {
+                freezeChunk(chunk);
+
+                scene.remove(chunk.mesh);
+
+                chunk.mesh = null;
+                chunk.coins = null;
+            });
+    }
+}
+
+// ============================================================
+// PARTIKEL
 // ============================================================
 
 const particles = [];
 
 function createPickupEffect(x, y, z) {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
         const particle = new THREE.Mesh(
             new THREE.SphereGeometry(0.035, 8, 8),
             new THREE.MeshBasicMaterial({
@@ -859,12 +1510,12 @@ function createPickupEffect(x, y, z) {
         particle.position.set(x, y, z);
 
         particle.userData.velocity = new THREE.Vector3(
-            random(-1, 1),
+            random(-1.2, 1.2),
             random(0.5, 2),
-            random(-1, 1)
+            random(-1.2, 1.2)
         );
 
-        particle.userData.life = 0.4;
+        particle.userData.life = 0.45;
 
         scene.add(particle);
         particles.push(particle);
@@ -873,237 +1524,577 @@ function createPickupEffect(x, y, z) {
 
 function updateParticles(dt) {
     for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
+        const particle = particles[i];
 
-        p.position.addScaledVector(p.userData.velocity, dt);
-        p.userData.life -= dt;
+        particle.position.addScaledVector(
+            particle.userData.velocity,
+            dt
+        );
 
-        p.material.opacity = Math.max(0, p.userData.life / 0.4);
+        particle.userData.life -= dt;
 
-        if (p.userData.life <= 0) {
-            scene.remove(p);
-            p.geometry.dispose();
-            p.material.dispose();
+        particle.material.opacity = Math.max(
+            0,
+            particle.userData.life / 0.45
+        );
+
+        if (particle.userData.life <= 0) {
+            scene.remove(particle);
+
+            particle.geometry.dispose();
+            particle.material.dispose();
+
             particles.splice(i, 1);
         }
     }
 }
 
 // ============================================================
-// STAPELMÜNZE SAMMELN
+// MÜNZEN EINSAMMELN
 // ============================================================
 
-function collectPileCoin() {
-    if (!locked) return false;
+const raycaster = new THREE.Raycaster();
 
-    if (getHeldCoins() >= MAX_INVENTORY) {
-        showMessage("Inventar ist voll!");
-        return false;
-    }
+function collectCoin() {
+    if (!locked) return;
 
-    const target = findPileCoin();
-    if (!target) return false;
-
-    const { level, cell, point } = target;
-    const count = cellCounts[level][cell.index];
-
-    if (count <= 0) return false;
-
-    const chunk = getChunkForCell(level, cell);
-    if (!chunk.mesh) return false;
-
-    const localId = cellStarts[level][cell.index] + count - 1;
-
-    const coinPosition = {
-        x: point.x,
-        y: point.y - COIN_THICKNESS / 2,
-        z: point.z
-    };
-
-    if (!createInventoryCoin(coinPosition)) return false;
-
-    cellCounts[level][cell.index]--;
-
-    dummy.position.set(0, -1000, 0);
-    dummy.quaternion.identity();
-    dummy.scale.set(0, 0, 0);
-    dummy.updateMatrix();
-
-    chunk.mesh.setMatrixAt(localId, dummy.matrix);
-    chunk.mesh.instanceMatrix.needsUpdate = true;
-
-    chunk.remaining--;
-
-    createPickupEffect(point.x, point.y, point.z);
-    showMessage("+1 Coin");
-
-    return true;
-}
-
-// ============================================================
-// MÜNZE FALLEN LASSEN
-// ============================================================
-
-function dropInventoryCoin() {
-    if (getHeldCoins() <= 0) {
-        showMessage("Keine Münzen im Inventar!");
-        return false;
-    }
-
-    const success = pickup.dropCoin();
-
-    if (!success) {
-        showMessage("Münze konnte nicht fallen gelassen werden!");
-        return false;
-    }
-
-    showMessage("Münze fallengelassen!");
-    updateHUD();
-
-    return true;
-}
-
-// ============================================================
-// FALLEN GELASSENE MÜNZEN SYNCHRONISIEREN
-// ============================================================
-
-const physicsQuaternion = new THREE.Quaternion();
-
-const visualCorrection = new THREE.Quaternion()
-    .setFromAxisAngle(
-        new THREE.Vector3(1, 0, 0),
-        -Math.PI / 2
+    raycaster.setFromCamera(
+        new THREE.Vector2(0, 0),
+        camera
     );
 
-function updateDroppedCoinVisuals() {
-    for (const coin of pickup.coins.values()) {
-        if (!coin.available) continue;
-        if (!coin.physicsCoin?.active) continue;
-        if (!coin.mesh) continue;
+    const visibleChunks = [];
 
-        const transform = physics.getTransform(coin.physicsCoin);
-        if (!transform) continue;
-
-        const p = transform.position;
-        const r = transform.rotation;
-
-        coin.mesh.position.set(p.x, p.y, p.z);
-
-        physicsQuaternion.set(r.x, r.y, r.z, r.w);
-
-        coin.mesh.quaternion.copy(physicsQuaternion)
-            .multiply(visualCorrection);
-
-        if (p.y < -60) {
-            scene.remove(coin.mesh);
-            physics.removeCoin(coin.physicsCoin);
-            coin.available = false;
+    for (const floorChunks of chunks) {
+        for (const chunk of floorChunks) {
+            if (chunk.mesh && chunk.mesh.visible) {
+                visibleChunks.push(chunk.mesh);
+            }
         }
+    }
+
+    const hits = raycaster.intersectObjects(
+        visibleChunks,
+        true
+    );
+
+    if (!hits.length) return;
+
+    const hit = hits[0];
+
+    if (hit.distance > 4.5) return;
+
+    const chunk = hit.object.userData.chunk;
+
+    if (!chunk || !chunk.coins) return;
+
+    const coin = chunk.coins[hit.instanceId];
+
+    if (!coin || coin.collected) return;
+
+    if (
+        getHeldCoins() >=
+        CONFIG.inventorySlots * CONFIG.stackLimit
+    ) {
+        showMessage("INVENTAR VOLL!");
+        return;
+    }
+
+    coin.collected = true;
+
+    if (coin.body) {
+        world.removeRigidBody(coin.body);
+        activeCoins.delete(coin);
+        coin.body = null;
+    }
+
+    setCoinMatrix(chunk.mesh, coin);
+
+    chunk.mesh.instanceMatrix.needsUpdate = true;
+
+    const added = addCoins(1);
+
+    if (added !== 1) {
+        coin.collected = false;
+        showMessage("INVENTAR VOLL!");
+        return;
+    }
+
+    showMessage("+1 COIN");
+
+    if (hit.point) {
+        createPickupEffect(
+            hit.point.x,
+            hit.point.y,
+            hit.point.z
+        );
     }
 }
 
 // ============================================================
-// MÜNZZÄHLMASCHINE
+// MÜNZEN ABLEGEN
 // ============================================================
 
-const machine = createCoinCountingMachine(
-    scene,
-    physics,
-    {
-        position: MACHINE_POSITION,
-        scale: 1,
-        spawnInterval: 0.13,
-        maxQueuedCoins: MAX_INVENTORY
+const droppedCoins = [];
+
+function createDroppedCoin(x, y, z) {
+    const mesh = coinFactory.create({
+        x,
+        y,
+        z
+    });
+
+    scene.add(mesh);
+
+    const body = world.createRigidBody(
+        RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(x, y, z)
+            .setLinearDamping(0.2)
+            .setAngularDamping(0.35)
+    );
+
+    world.createCollider(
+        RAPIER.ColliderDesc.cylinder(
+            CONFIG.coinThickness / 2,
+            CONFIG.coinRadius
+        )
+            .setDensity(7)
+            .setFriction(0.8)
+            .setRestitution(0.12),
+        body
+    );
+
+    body.setLinvel({
+        x: random(-0.7, 0.7),
+        y: 1.2,
+        z: random(-0.7, 0.7)
+    }, true);
+
+    const dropped = {
+        mesh,
+        body
+    };
+
+    mesh.traverse(object => {
+        if (object.isMesh) {
+            object.userData.droppedCoin = dropped;
+        }
+    });
+
+    droppedCoins.push(dropped);
+
+    return dropped;
+}
+
+function dropCoin() {
+    if (!locked) return;
+
+    const amount = inventory[selectedSlot];
+
+    if (amount <= 0) {
+        showMessage("SLOT IST LEER!");
+        return;
     }
+
+    inventory[selectedSlot]--;
+
+    const direction = new THREE.Vector3(
+        -Math.sin(yaw),
+        0,
+        -Math.cos(yaw)
+    );
+
+    const position = player.position.clone()
+        .add(direction.multiplyScalar(1.1));
+
+    createDroppedCoin(
+        position.x,
+        position.y - 0.25,
+        position.z
+    );
+
+    updateHUD();
+    showMessage("COIN ABGELEGT");
+}
+
+function collectDroppedCoin() {
+    if (!locked) return;
+
+    raycaster.setFromCamera(
+        new THREE.Vector2(0, 0),
+        camera
+    );
+
+    const meshes = droppedCoins.map(coin => coin.mesh);
+
+    const hits = raycaster.intersectObjects(
+        meshes,
+        true
+    );
+
+    if (!hits.length) return;
+
+    const hit = hits[0];
+
+    if (hit.distance > 4.5) return;
+
+    const dropped = hit.object.userData.droppedCoin;
+
+    if (!dropped) return;
+
+    if (
+        getHeldCoins() >=
+        CONFIG.inventorySlots * CONFIG.stackLimit
+    ) {
+        showMessage("INVENTAR VOLL!");
+        return;
+    }
+
+    const index = droppedCoins.indexOf(dropped);
+
+    if (index < 0) return;
+
+    world.removeRigidBody(dropped.body);
+    scene.remove(dropped.mesh);
+
+    droppedCoins.splice(index, 1);
+
+    dropped.mesh.traverse(object => {
+        if (object.isMesh) {
+            object.geometry?.dispose?.();
+        }
+    });
+
+    addCoins(1);
+    showMessage("+1 COIN");
+}
+
+// ============================================================
+// MÜNZZÄHLER
+// ============================================================
+
+const machine = new THREE.Group();
+
+const machinePosition = CONFIG.machinePosition;
+
+createBox(
+    2.5,
+    2.7,
+    1.7,
+    darkSteel,
+    0,
+    1.35,
+    0,
+    machine
 );
 
+createBox(
+    2.7,
+    0.2,
+    1.9,
+    steel,
+    0,
+    2.75,
+    0,
+    machine
+);
+
+// Rahmen
+
+for (const x of [-1.15, 1.15]) {
+    createBox(
+        0.12,
+        2.5,
+        0.12,
+        steel,
+        x,
+        1.35,
+        0.88,
+        machine
+    );
+}
+
+// Münzeinwurf
+
+createBox(
+    1.15,
+    0.12,
+    0.7,
+    darkSteel,
+    0,
+    2.9,
+    0,
+    machine
+);
+
+// Display
+
+const displayCanvas = document.createElement("canvas");
+displayCanvas.width = 512;
+displayCanvas.height = 192;
+
+const displayContext = displayCanvas.getContext("2d");
+
+const displayTexture = new THREE.CanvasTexture(displayCanvas);
+
+const displayMaterial = new THREE.MeshStandardMaterial({
+    map: displayTexture,
+    emissive: 0x0bff83,
+    emissiveMap: displayTexture,
+    emissiveIntensity: 0.7
+});
+
+const displayPanel = new THREE.Mesh(
+    new THREE.BoxGeometry(1.7, 0.65, 0.08),
+    displayMaterial
+);
+
+displayPanel.position.set(0, 2.05, 0.89);
+machine.add(displayPanel);
+
+// Förderband
+
+createBox(
+    1.5,
+    0.18,
+    2.8,
+    darkSteel,
+    0,
+    0.95,
+    2.1,
+    machine
+);
+
+const beltStripes = [];
+
+for (let i = 0; i < 9; i++) {
+    const stripe = createBox(
+        1.45,
+        0.035,
+        0.08,
+        steel,
+        0,
+        1.06,
+        0.9 + i * 0.3,
+        machine
+    );
+
+    beltStripes.push(stripe);
+}
+
+const rollers = [];
+
+for (const z of [0.8, 3.4]) {
+    const roller = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.14, 1.6, 16),
+        steel
+    );
+
+    roller.rotation.z = Math.PI / 2;
+    roller.position.set(0, 0.95, z);
+
+    machine.add(roller);
+    rollers.push(roller);
+}
+
+const machineLight = new THREE.PointLight(
+    0x3cff9b,
+    3,
+    6
+);
+
+machineLight.position.set(0, 2.5, 1);
+machine.add(machineLight);
+
+machine.position.set(
+    machinePosition.x,
+    machinePosition.y,
+    machinePosition.z
+);
+
+scene.add(machine);
+
 // ============================================================
-// NACHRICHTEN
+// DISPLAY
 // ============================================================
 
-function showMessage(text) {
-    const el = document.getElementById("message");
-    if (!el) return;
+function updateMachineDisplay() {
+    displayContext.fillStyle = "#03140c";
+    displayContext.fillRect(0, 0, 512, 192);
 
-    el.textContent = text;
-    el.style.opacity = "1";
+    displayContext.fillStyle = "#48ff9b";
+    displayContext.font = "bold 27px Arial";
+    displayContext.fillText("COIN COUNTER", 24, 40);
 
-    clearTimeout(window.messageTimeout);
+    displayContext.font = "bold 58px monospace";
 
-    window.messageTimeout = setTimeout(() => {
-        el.style.opacity = "0";
-    }, 1500);
+    displayContext.fillText(
+        money.toLocaleString("de-DE"),
+        24,
+        112
+    );
+
+    displayContext.font = "bold 20px Arial";
+    displayContext.fillText("COINS COUNTED", 24, 155);
+
+    displayTexture.needsUpdate = true;
+}
+
+updateMachineDisplay();
+
+// ============================================================
+// FÖRDERBAND-MÜNZEN
+// ============================================================
+
+const beltCoins = [];
+
+function spawnBeltCoin() {
+    if (beltCoins.length >= 24) return;
+
+    const x = machine.position.x + random(-0.4, 0.4);
+    const y = 1.55;
+    const z = machine.position.z + 1.5;
+
+    const mesh = coinFactory.create({
+        x,
+        y,
+        z
+    });
+
+    scene.add(mesh);
+
+    const body = world.createRigidBody(
+        RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(x, y, z)
+            .setLinearDamping(0.12)
+            .setAngularDamping(0.2)
+    );
+
+    world.createCollider(
+        RAPIER.ColliderDesc.cylinder(
+            CONFIG.coinThickness / 2,
+            CONFIG.coinRadius
+        )
+            .setDensity(7)
+            .setFriction(0.7)
+            .setRestitution(0.15),
+        body
+    );
+
+    body.setLinvel({
+        x: random(-0.1, 0.1),
+        y: 0.2,
+        z: 2.7
+    }, true);
+
+    beltCoins.push({
+        mesh,
+        body,
+        age: 0
+    });
+}
+
+function updateBeltCoins(dt) {
+    for (let i = beltCoins.length - 1; i >= 0; i--) {
+        const coin = beltCoins[i];
+
+        coin.age += dt;
+
+        const position = coin.body.translation();
+        const rotation = coin.body.rotation();
+
+        coin.mesh.position.set(
+            position.x,
+            position.y,
+            position.z
+        );
+
+        coin.mesh.quaternion.set(
+            rotation.x,
+            rotation.y,
+            rotation.z,
+            rotation.w
+        );
+
+        if (
+            coin.age > 5 ||
+            position.z > machine.position.z + 5
+        ) {
+            scene.remove(coin.mesh);
+            world.removeRigidBody(coin.body);
+
+            beltCoins.splice(i, 1);
+        }
+    }
 }
 
 // ============================================================
 // EINZAHLEN
 // ============================================================
 
-function isNearMachine() {
-    const dx = player.position.x - MACHINE_POSITION.x;
-    const dz = player.position.z - MACHINE_POSITION.z;
+let beltSpawnQueue = 0;
+let beltSpawnTimer = 0;
 
-    return Math.sqrt(dx * dx + dz * dz) < 3.5;
+function showMessage(text) {
+    messageUI.textContent = text;
+    messageUI.style.opacity = "1";
+
+    clearTimeout(window.messageTimeout);
+
+    window.messageTimeout = setTimeout(() => {
+        messageUI.style.opacity = "0";
+    }, 1600);
 }
 
 function depositCoins() {
-    if (!isNearMachine()) return false;
+    const dx = player.position.x - machine.position.x;
+    const dz = player.position.z - machine.position.z;
 
-    const amount = pickup.getInventoryCount();
+    const distance = Math.sqrt(dx * dx + dz * dz);
+
+    if (distance > 4) {
+        showMessage("GEHE ZUM MÜNZZÄHLER!");
+        return;
+    }
+
+    const amount = getHeldCoins();
 
     if (amount <= 0) {
-        showMessage("Keine Münzen zum Einzahlen!");
-        return false;
+        showMessage("KEINE MÜNZEN!");
+        return;
     }
 
-    const accepted = machine.insertCoins(amount, {
-        valuePerCoin: 1
-    });
+    money += amount;
+    inventory.fill(0);
 
-    if (accepted <= 0) {
-        showMessage("Maschine ist voll!");
-        return false;
-    }
-
-    pickup.takeCoinsForMachine(accepted);
-
-    showMessage(
-        accepted.toLocaleString("de-DE") +
-        " Münzen werden eingeworfen!"
-    );
+    beltSpawnQueue = Math.min(amount, 24);
+    beltSpawnTimer = 0;
 
     updateHUD();
+    updateMachineDisplay();
 
-    return true;
+    showMessage(
+        "+" + amount.toLocaleString("de-DE") + " COINS EINGEZAHLT!"
+    );
+
+    machine.scale.set(1.04, 0.94, 1.04);
+
+    setTimeout(() => {
+        machine.scale.set(1, 1, 1);
+    }, 150);
 }
 
-// ============================================================
-// BODENHÖHE
-// ============================================================
+function updateDepositAnimation(dt) {
+    if (beltSpawnQueue <= 0) return;
 
-function getGroundHeight(x, z, level) {
-    const floorY = -level * FLOOR_HEIGHT;
-    const cell = worldToCell(x, z);
+    beltSpawnTimer += dt;
 
-    if (level === 0 && cell) {
-        const amount = cellCounts[0][cell.index];
+    if (beltSpawnTimer >= 0.12) {
+        beltSpawnTimer = 0;
 
-        if (amount > 0) {
-            return floorY + amount * COIN_THICKNESS;
-        }
+        spawnBeltCoin();
+        beltSpawnQueue--;
     }
-
-    if (isInRampArea(x, z)) {
-        const progress = clamp(
-            (z - STAIR_START_Z) / STAIR_LENGTH,
-            0,
-            1
-        );
-
-        return floorY - progress * FLOOR_HEIGHT;
-    }
-
-    return floorY;
 }
 
 // ============================================================
@@ -1111,9 +2102,6 @@ function getGroundHeight(x, z, level) {
 // ============================================================
 
 function updatePlayer(dt) {
-    const oldX = player.position.x;
-    const oldZ = player.position.z;
-
     const forward = new THREE.Vector3(
         -Math.sin(yaw),
         0,
@@ -1126,67 +2114,55 @@ function updatePlayer(dt) {
         -Math.sin(yaw)
     );
 
-    const direction = new THREE.Vector3();
+    const movement = new THREE.Vector3();
 
-    if (keys.KeyW) direction.add(forward);
-    if (keys.KeyS) direction.sub(forward);
-    if (keys.KeyD) direction.add(right);
-    if (keys.KeyA) direction.sub(right);
+    if (keys.KeyW) movement.add(forward);
+    if (keys.KeyS) movement.sub(forward);
+    if (keys.KeyD) movement.add(right);
+    if (keys.KeyA) movement.sub(right);
 
-    if (direction.lengthSq() > 0) {
-        direction.normalize();
+    if (movement.lengthSq() > 0) {
+        movement.normalize();
 
-        player.position.x += direction.x * player.speed * dt;
-        player.position.z += direction.z * player.speed * dt;
+        player.position.addScaledVector(
+            movement,
+            player.speed * dt
+        );
     }
 
-    player.position.x = clamp(player.position.x, -11.4, 11.4);
-    player.position.z = clamp(player.position.z, -11.4, 11.4);
-
-    const cell = worldToCell(player.position.x, player.position.z);
-    let blocked = false;
-
-    if (cell && !isInRampArea(player.position.x, player.position.z)) {
-        for (let floor = 1; floor < FLOOR_COUNT; floor++) {
-            const amount = cellCounts[floor][cell.index];
-            if (amount <= 0) continue;
-
-            const bottom = -floor * FLOOR_HEIGHT;
-            const top = bottom + amount * COIN_THICKNESS;
-            const feet = player.position.y - player.height;
-
-            if (
-                feet < top - 0.03 &&
-                player.position.y > bottom + 0.03
-            ) {
-                blocked = true;
-                break;
-            }
-        }
-    }
-
-    if (blocked) {
-        player.position.x = oldX;
-        player.position.z = oldZ;
-    }
-
-    if (
-        Math.abs(player.position.x + 8) < 1.9 &&
-        Math.abs(player.position.z + 8) < 1.6
-    ) {
-        player.position.x = oldX;
-        player.position.z = oldZ;
-    }
-
-    const activeLevel = getCurrentFloor();
-
-    const ground = getGroundHeight(
+    player.position.x = clamp(
         player.position.x,
-        player.position.z,
-        activeLevel
+        -11.4,
+        11.4
     );
 
+    player.position.z = clamp(
+        player.position.z,
+        -11.4,
+        11.4
+    );
+
+    const level = getCurrentFloor();
+
+    let ground = -level * CONFIG.floorHeight;
+
+    if (
+        isInRampArea(
+            player.position.x,
+            player.position.z
+        )
+    ) {
+        const progress = clamp(
+            (player.position.z + 7) / 14,
+            0,
+            1
+        );
+
+        ground -= progress * CONFIG.floorHeight;
+    }
+
     player.velocity.y -= 20 * dt;
+
     player.position.y += player.velocity.y * dt;
 
     if (player.position.y <= ground + player.height) {
@@ -1198,83 +2174,18 @@ function updatePlayer(dt) {
     }
 
     camera.position.copy(player.position);
+
     camera.rotation.order = "YXZ";
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
-
-    physics.pushCoinsNearPlayer(
-        player.position,
-        1.25,
-        0.8
-    );
-
-    updateCoinVisibility();
 }
 
 // ============================================================
-// INTERAKTION
-// ============================================================
-
-function updateInteraction() {
-    const ui = document.getElementById("interaction");
-    if (!ui) return;
-
-    if (isNearMachine()) {
-        ui.style.display = "block";
-        ui.innerHTML = "<b>[E]</b> Münzen in die Zählmaschine einwerfen";
-        return;
-    }
-
-    const droppedCoin = pickup.findTargetCoin();
-    const pileCoin = findPileCoin();
-
-    if (droppedCoin || pileCoin) {
-        ui.style.display = "block";
-        ui.innerHTML = "<b>[LINKSKLICK]</b> Münze einsammeln";
-        return;
-    }
-
-    if (getHeldCoins() > 0) {
-        ui.style.display = "block";
-        ui.innerHTML = "<b>[Q]</b> Münze fallen lassen";
-        return;
-    }
-
-    ui.style.display = "none";
-}
-
-// ============================================================
-// MAUSKLICK
-// ============================================================
-
-document.addEventListener("mousedown", event => {
-    if (!locked || event.button !== 0) return;
-
-    if (pickup.pickupCoin()) {
-        showMessage("+1 Coin");
-        updateHUD();
-        return;
-    }
-
-    collectPileCoin();
-});
-
-// ============================================================
-// TASTEN
+// EINGABEN
 // ============================================================
 
 document.addEventListener("keydown", event => {
     keys[event.code] = true;
-
-    if (event.repeat) return;
-
-    if (event.code === "KeyE" && locked) {
-        depositCoins();
-    }
-
-    if (event.code === "KeyQ" && locked) {
-        dropInventoryCoin();
-    }
 
     if (
         event.code === "Space" &&
@@ -1285,12 +2196,22 @@ document.addEventListener("keydown", event => {
         player.grounded = false;
     }
 
+    if (event.code === "KeyE" && locked) {
+        depositCoins();
+    }
+
+    if (event.code === "KeyQ" && locked) {
+        dropCoin();
+    }
+
     if (event.code.startsWith("Digit")) {
-        const number = Number(event.code.replace("Digit", ""));
+        const number = Number(
+            event.code.replace("Digit", "")
+        );
 
         if (number >= 1 && number <= 9) {
             selectedSlot = number - 1;
-            renderInventory();
+            updateHUD();
         }
     }
 });
@@ -1298,10 +2219,6 @@ document.addEventListener("keydown", event => {
 document.addEventListener("keyup", event => {
     keys[event.code] = false;
 });
-
-// ============================================================
-// MAUSBEWEGUNG
-// ============================================================
 
 document.addEventListener("mousemove", event => {
     if (!locked) return;
@@ -1312,63 +2229,43 @@ document.addEventListener("mousemove", event => {
     pitch = clamp(pitch, -1.5, 1.5);
 });
 
-// ============================================================
-// RECHTSKLICK
-// ============================================================
+document.addEventListener("mousedown", event => {
+    if (!locked) return;
+
+    if (event.button === 0) {
+        collectDroppedCoin();
+        collectCoin();
+    }
+});
 
 document.addEventListener("contextmenu", event => {
     event.preventDefault();
 });
 
 // ============================================================
-// ANIMATION
-// ============================================================
-
-let lastTime = 0;
-let hudTimer = 0;
-
-const HUD_INTERVAL = 0.15;
-
-function animate(time) {
-    requestAnimationFrame(animate);
-
-    const dt = Math.min(
-        (time - lastTime) / 1000,
-        0.04
-    );
-
-    lastTime = time;
-
-    if (locked) {
-        updatePlayer(dt);
-        updateInteraction();
-    }
-
-    physics.update(dt);
-    machine.update(dt);
-    pickup.update(dt);
-
-    updateDroppedCoinVisuals();
-
-    money = machine.totalValue;
-
-    hudTimer += dt;
-
-    if (hudTimer >= HUD_INTERVAL) {
-        hudTimer = 0;
-        updateHUD();
-    }
-
-    updateParticles(dt);
-
-    renderer.render(scene, camera);
-}
-
-// ============================================================
-// STARTBUTTON – SPIEL STARTET ERST NACH KLICK
+// STARTSYSTEM – WICHTIGER FIX
 // ============================================================
 
 let gameStarted = false;
+
+function requestGamePointerLock() {
+    if (
+        renderer.domElement.requestPointerLock &&
+        document.pointerLockElement !== renderer.domElement
+    ) {
+        try {
+            const result = renderer.domElement.requestPointerLock();
+
+            if (result && typeof result.catch === "function") {
+                result.catch(() => {
+                    showMessage("KLICKE AUF SPIEL STARTEN!");
+                });
+            }
+        } catch (error) {
+            console.warn("Pointer Lock konnte nicht gestartet werden:", error);
+        }
+    }
+}
 
 function startGame() {
     if (!gameStarted) {
@@ -1379,58 +2276,207 @@ function startGame() {
         requestAnimationFrame(animate);
     }
 
-    // Auch nach Verlassen des Pointer-Locks kann erneut gestartet werden.
-    renderer.domElement.requestPointerLock();
+    startScreen.style.display = "none";
+
+    requestGamePointerLock();
 }
 
-if (startButton) {
-    startButton.addEventListener("click", event => {
-        event.preventDefault();
-        event.stopPropagation();
+// Der Button selbst bekommt den Klick-Handler.
+
+startButton.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    startGame();
+});
+
+// Auch ein Klick auf den Startbildschirm funktioniert.
+
+startScreen.addEventListener("click", event => {
+    if (
+        event.target === startScreen ||
+        event.target === startButton
+    ) {
         startGame();
-    });
-} else {
-    console.error(
-        "Start-Button nicht gefunden. Prüfe id='startButton' in deiner HTML-Datei."
-    );
-}
+    }
+});
+
+// Ein Klick auf das Spielfeld kann die Maus erneut sperren.
+
+renderer.domElement.addEventListener("click", () => {
+    if (gameStarted && !locked) {
+        requestGamePointerLock();
+    }
+});
 
 document.addEventListener("pointerlockchange", () => {
     locked =
         document.pointerLockElement === renderer.domElement;
 
-    if (startScreen) {
-        startScreen.style.display =
-            locked ? "none" : "flex";
+    crosshair.style.display = locked ? "block" : "none";
+
+    if (locked) {
+        startScreen.style.display = "none";
+    } else if (gameStarted) {
+        startScreen.style.display = "flex";
+        startButton.textContent = "WEITER SPIELEN";
     }
 });
+
+// ============================================================
+// ANIMATION
+// ============================================================
+
+let lastTime = 0;
+
+let visibilityTimer = 0;
+let activationTimer = 0;
+let animationTime = 0;
+
+function animate(time) {
+    requestAnimationFrame(animate);
+
+    const dt = Math.min(
+        (time - lastTime) / 1000,
+        0.033
+    );
+
+    lastTime = time;
+    animationTime += dt;
+
+    // Spieler
+
+    if (locked) {
+        updatePlayer(dt);
+    }
+
+    // Physik mit festem Zeitschritt
+
+    physicsAccumulator += dt;
+
+    while (physicsAccumulator >= 1 / 60) {
+        world.timestep = 1 / 60;
+        updateCoinPhysics();
+
+        physicsAccumulator -= 1 / 60;
+    }
+
+    // Chunks aktualisieren
+
+    if (locked) {
+        visibilityTimer += dt;
+        activationTimer += dt;
+
+        if (visibilityTimer >= 0.12) {
+            visibilityTimer = 0;
+            updateVisibility();
+        }
+
+        if (activationTimer >= 0.25) {
+            activationTimer = 0;
+            activateNearbyCoins();
+        }
+    }
+
+    // Partikel
+
+    updateParticles(dt);
+
+    // Förderband
+
+    for (const stripe of beltStripes) {
+        stripe.position.z += dt * 2.7;
+
+        if (stripe.position.z > 3.5) {
+            stripe.position.z = 0.9;
+        }
+    }
+
+    for (const roller of rollers) {
+        roller.rotation.x += dt * 3;
+    }
+
+    // Einzahlanimation
+
+    updateDepositAnimation(dt);
+    updateBeltCoins(dt);
+
+    // Abgelegte Münzen synchronisieren
+
+    for (const coin of droppedCoins) {
+        const position = coin.body.translation();
+        const rotation = coin.body.rotation();
+
+        coin.mesh.position.set(
+            position.x,
+            position.y,
+            position.z
+        );
+
+        coin.mesh.quaternion.set(
+            rotation.x,
+            rotation.y,
+            rotation.z,
+            rotation.w
+        );
+    }
+
+    renderer.render(scene, camera);
+}
 
 // ============================================================
 // FENSTERGRÖSSE
 // ============================================================
 
 window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
 
-    renderer.setSize(
-        window.innerWidth,
-        window.innerHeight
-    );
+    renderer.setSize(innerWidth, innerHeight);
 
     renderer.setPixelRatio(
-        Math.min(window.devicePixelRatio, 1.25)
+        Math.min(devicePixelRatio, 1.5)
     );
 });
 
 // ============================================================
-// ERSTER RENDER – OHNE SPIELSTART
+// FEHLERANZEIGE
+// ============================================================
+
+window.addEventListener("error", event => {
+    console.error("Spiel-Fehler:", event.error);
+
+    if (!gameStarted) {
+        startScreen.style.display = "flex";
+        startButton.textContent = "SPIELFEHLER";
+    }
+});
+
+window.addEventListener("unhandledrejection", event => {
+    console.error("Asynchroner Fehler:", event.reason);
+});
+
+// ============================================================
+// SPIEL INITIALISIEREN
 // ============================================================
 
 updateHUD();
-updateCoinVisibility();
+
+camera.position.copy(player.position);
+
+updateVisibility();
 
 renderer.render(scene, camera);
+
+// Spielschleife beginnt ERST nach Klick auf SPIEL STARTEN.
+
+startScreen.style.display = "flex";
+startButton.style.pointerEvents = "auto";
+startButton.disabled = false;
+
+console.log("ONE MILLION COINS geladen.");
+console.log("Münzen insgesamt:", TOTAL_COINS.toLocaleString("de-DE"));
+console.log("Startbildschirm bereit.");
 
 // ============================================================
 // DEBUG
@@ -1440,42 +2486,11 @@ window.oneMillionCoins = {
     scene,
     camera,
     renderer,
-    physics,
-    pickup,
-    machine,
-    staircase,
-    bunkerLighting,
-    coinFactory,
-
-    getMoney() {
-        return machine.totalValue;
-    },
-
-    getInventory() {
-        return pickup.getInventoryCount();
-    },
-
-    getActivePhysicsCoins() {
-        return physics.getActiveCount();
-    },
-
-    getTotalPhysicsCoins() {
-        return physics.getCoinCount();
-    },
-
-    getTotalCoins() {
-        return TOTAL_COINS;
-    },
-
-    getLoadedChunks() {
-        let count = 0;
-
-        for (const floor of coinChunks) {
-            for (const chunk of floor) {
-                if (chunk.mesh) count++;
-            }
-        }
-
-        return count;
-    }
+    player,
+    inventory,
+    chunks,
+    money: () => money,
+    held: getHeldCoins,
+    total: TOTAL_COINS,
+    start: startGame
 };
